@@ -25,7 +25,7 @@ watch:
 clean:
 	rm -rf coverage.txt $(TARGET_EXEC) 
 
-IMAGE := ghcr.io/raeperd/kickstart
+IMAGE := ghcr.io/raeperd/realworld.go
 docker:
 	docker build . --build-arg VERSION=$(VERSION) -t $(IMAGE):$(VERSION)
 
