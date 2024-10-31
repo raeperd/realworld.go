@@ -86,6 +86,7 @@ func route(log *slog.Logger, version string) http.Handler {
 	mux.Handle("/debug/", handleGetDebug())
 
 	handler := accesslog(mux, log)
+	handler = cors(handler)
 	handler = recovery(handler, log)
 	return handler
 }
@@ -152,7 +153,6 @@ func handleGetOpenapi(version string) http.HandlerFunc {
 	body := bytes.Replace(openapi, []byte("${{ VERSION }}"), []byte(version), 1)
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/plain")
-		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.WriteHeader(http.StatusOK)
 		if _, err := w.Write(body); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -183,6 +183,22 @@ func accesslog(next http.Handler, log *slog.Logger) http.Handler {
 			slog.String("ip", r.RemoteAddr),
 			slog.Int("status", wr.status),
 			slog.Int("bytes", wr.numBytes))
+	})
+}
+
+// cors is a middleware that adds CORS headers to responses
+// https://swagger.io/docs/open-source-tools/swagger-ui/usage/cors/
+func cors(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, api_key")
+
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+
+		next.ServeHTTP(w, r)
 	})
 }
 
