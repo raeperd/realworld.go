@@ -2,35 +2,69 @@ package api
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
+
+	"github.com/raeperd/realworld.go/internal/sqlite"
 )
 
-func HandlePostUsers(w http.ResponseWriter, r *http.Request) {
-	var request userPostRequestBody
-	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	defer func() { _ = r.Body.Close() }()
+func HandlePostUsers(db *sql.DB) func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var request userPostRequestBody
+		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		defer func() { _ = r.Body.Close() }()
 
-	if errs := request.Validate(); len(errs) > 0 {
-		encodeErrorResponse(r.Context(), errs, w)
-		return
-	}
+		if errs := request.Validate(); len(errs) > 0 {
+			encodeErrorResponse(r.Context(), http.StatusUnprocessableEntity, errs, w)
+			return
+		}
 
-	encodeResponse(r.Context(), http.StatusCreated, userPostResponseBody{
-		Email:    request.User.Email,
-		Token:    "token",
-		Username: request.User.Username,
-		Bio:      "bio",
-		Image:    "image",
-	}, w)
+		tx, err := db.BeginTx(r.Context(), nil)
+		if err != nil {
+			encodeErrorResponse(r.Context(), http.StatusInternalServerError, []error{err}, w)
+			return
+		}
+		defer func() { _ = tx.Rollback() }()
+
+		queries := sqlite.New(tx)
+		user, err := queries.GetUserByEmail(r.Context(), request.User.Email)
+		if !errors.Is(err, sql.ErrNoRows) {
+			encodeErrorResponse(r.Context(), http.StatusConflict, []error{fmt.Errorf("user with email %s already exists", request.User.Email)}, w)
+			return
+		}
+
+		user, err = queries.CreateUser(r.Context(), sqlite.CreateUserParams{
+			Username: request.User.Username,
+			Email:    request.User.Email,
+			Password: request.User.Password,
+		})
+		if err != nil {
+			encodeErrorResponse(r.Context(), http.StatusInternalServerError, []error{err}, w)
+			return
+		}
+		if err := tx.Commit(); err != nil {
+			encodeErrorResponse(r.Context(), http.StatusInternalServerError, []error{err}, w)
+			return
+		}
+
+		encodeResponse(r.Context(), http.StatusCreated, userPostResponseBody{
+			Email:    user.Email,
+			Token:    "token", // TODO: generate token
+			Username: user.Username,
+			Bio:      user.Bio.String,
+			Image:    user.Image.String,
+		}, w)
+	}
 }
 
-func encodeErrorResponse(ctx context.Context, errs []error, w http.ResponseWriter) {
+func encodeErrorResponse(ctx context.Context, status int, errs []error, w http.ResponseWriter) {
 	errResp := errorResponseBody{
 		Errors: struct {
 			Body []string `json:"body"`
@@ -42,7 +76,7 @@ func encodeErrorResponse(ctx context.Context, errs []error, w http.ResponseWrite
 		errResp.Errors.Body[i] = err.Error()
 	}
 
-	encodeResponse(ctx, http.StatusUnprocessableEntity, errResp, w)
+	encodeResponse(ctx, status, errResp, w)
 }
 
 func encodeResponse[T responseBody](ctx context.Context, status int, body T, w http.ResponseWriter) {

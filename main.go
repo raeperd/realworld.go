@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	_ "embed"
 	"encoding/json"
 	"errors"
@@ -20,6 +21,8 @@ import (
 	"syscall"
 	"time"
 
+	_ "modernc.org/sqlite"
+
 	"github.com/raeperd/realworld.go/internal/api"
 )
 
@@ -34,6 +37,9 @@ func main() {
 // It is optional and can be omitted if not required.
 // Refer to [handleGetHealth] for more information.
 var Version string
+
+//go:embed internal/sqlite/schema.sql
+var ddl string
 
 // run initiates and starts the [http.Server], blocking until the context is canceled by OS signals.
 // It listens on a port specified by the -port flag, defaulting to 8080.
@@ -66,9 +72,19 @@ func run(ctx context.Context, w io.Writer, args []string, version string) error 
 	// }
 
 	slog.SetDefault(slog.New(slog.NewJSONHandler(w, nil)))
+
+	db, err := sql.Open("sqlite", ":memory:")
+	if err != nil {
+		return err
+	}
+
+	if _, err := db.ExecContext(ctx, ddl); err != nil {
+		return err
+	}
+
 	server := &http.Server{
 		Addr:              fmt.Sprintf(":%d", port),
-		Handler:           route(slog.Default(), version),
+		Handler:           route(slog.Default(), version, db),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
@@ -128,13 +144,13 @@ func run(ctx context.Context, w io.Writer, args []string, version string) error 
 // route sets up and returns an [http.Handler] for all the server routes.
 // It is the single source of truth for all the routes.
 // You can add custom [http.Handler] as needed.
-func route(log *slog.Logger, version string) http.Handler {
+func route(log *slog.Logger, version string, db *sql.DB) http.Handler {
 	mux := http.NewServeMux()
 	mux.Handle("GET /health", handleGetHealth(version))
 	mux.Handle("GET /openapi.yaml", handleGetOpenAPI(version))
 	mux.Handle("/debug/", handleGetDebug())
 
-	mux.HandleFunc("POST /api/users", api.HandlePostUsers)
+	mux.HandleFunc("POST /api/users", api.HandlePostUsers(db))
 
 	handler := accesslog(mux, log)
 	handler = recovery(handler, log)
