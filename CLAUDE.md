@@ -4,7 +4,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository Overview
 
-kickstart.go is a minimalistic HTTP server template in Go that serves as a production-ready starting point for building HTTP services. It deliberately uses only Go standard library with zero external dependencies, implementing best practices in a single file (~300 lines).
+This is a **RealWorld Example App** backend implementation in Go, demonstrating a fully-featured Medium.com clone API. Built using the [kickstart.go](https://github.com/raeperd/kickstart.go) template, it implements the complete [RealWorld API specification](https://github.com/gothinkster/realworld) while maintaining the template's principles of simplicity and minimal dependencies.
+
+### RealWorld Project Context
+- **Purpose**: "The mother of all demo apps" - showcases real-world patterns vs simple todo apps  
+- **API Specification**: Standardized across 100+ implementations in different languages
+- **Features**: User authentication, articles, comments, favorites, following, tags, feeds
+- **Demo**: [demo.realworld.show](https://demo.realworld.show) | **Docs**: [docs.realworld.show](https://docs.realworld.show)
 
 ## Common Development Commands
 
@@ -52,7 +58,10 @@ docker buildx build --platform linux/amd64,linux/arm64 -t kickstart.go .
 
 ## Architecture
 
-### Single-File Design
+### RealWorld API Implementation
+This implementation follows the [RealWorld API specification](https://github.com/gothinkster/realworld) exactly, enabling frontend interoperability with React, Angular, Vue, and other RealWorld frontends.
+
+### Single-File Design (from kickstart.go template)
 The entire server implementation resides in `main.go` with a clear structure:
 1. **main()** - Entry point that calls run() with dependencies
 2. **run()** - Core server logic, returns error for testability
@@ -121,5 +130,5 @@ GitHub Actions workflows handle:
 
 When making changes that affect CI:
 - Ensure tests pass locally first: `make test`
-- Check lint issues: `make lint`
+- Check lint issues: `make lint`  
 - Verify Docker build: `make docker`
