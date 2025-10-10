@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-func TestPostUsers(t *testing.T) {
+func TestPostUsers_Validation(t *testing.T) {
 	t.Parallel()
 
 	testcases := map[string]UserPostRequestBody{
@@ -38,6 +38,28 @@ func TestPostUsers(t *testing.T) {
 			t.Cleanup(func() { _ = res.Body.Close() })
 		})
 	}
+}
+
+func TestPostUsers_CreateUser(t *testing.T) {
+	t.Parallel()
+
+	req := UserPostRequestBody{
+		Username: "test",
+		Email:    "test@test.com",
+		Password: "test",
+	}
+	res := httpPostUsers(t, req)
+	testEqual(t, http.StatusCreated, res.StatusCode)
+	t.Cleanup(func() { _ = res.Body.Close() })
+
+	var response UserResponseBody
+	testNil(t, json.NewDecoder(res.Body).Decode(&response))
+	testEqual(t, req.Username, response.Username)
+	testEqual(t, req.Email, response.Email)
+
+	res = httpPostUsers(t, req) // return conflict when user already exists
+	testEqual(t, http.StatusConflict, res.StatusCode)
+	t.Cleanup(func() { _ = res.Body.Close() })
 }
 
 func httpPostUsers(t *testing.T, request UserPostRequestBody) *http.Response {
