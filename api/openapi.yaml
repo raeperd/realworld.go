@@ -17,8 +17,8 @@ tags:
   - name: Tags
   - name: User and Authentication
 servers:
+  - url: http://localhost:8080/api
   - url: https://api.realworld.io/api
-  - url: http://localhost:8080
 paths:
   /users/login:
     post:
