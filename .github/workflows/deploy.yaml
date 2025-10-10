@@ -13,7 +13,7 @@ on:
       - '.github/workflows/deploy.yaml'
 
 env:
-  REGISTRY_IMAGE: ghcr.io/raeperd/kickstart
+  REGISTRY_IMAGE: ghcr.io/raeperd/realworld.go
 
 jobs:
   build:
