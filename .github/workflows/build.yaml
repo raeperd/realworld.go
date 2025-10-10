@@ -1,0 +1,51 @@
+on:
+  push:
+    paths:
+      - '**/*.go'
+      - 'go.mod'
+      - 'go.sum'
+      - 'Makefile'
+      - 'Dockerfile'
+      - '.github/workflows/build.yaml'
+  pull_request:
+    paths:
+      - '**/*.go'
+      - 'go.mod'
+      - 'go.sum'
+      - 'Makefile'
+      - 'Dockerfile'
+      - '.github/workflows/build.yaml'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - name: check go mod
+        run: |
+          go mod download
+          go mod tidy
+          git diff --exit-code go.mod go.sum
+      - run: make build VERSION=${{ github.ref_name }}
+      - run: make test
+      - uses: shogo82148/actions-goveralls@v1
+        with:
+          path-to-profile: coverage.txt
+      - run: make docker VERSION=${{ github.ref_name }}
+      - run: make clean
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - uses: golangci/golangci-lint-action@v8
+        with:
+          version: v2.5
+      - run: go run golang.org/x/tools/gopls/internal/analysis/modernize/cmd/modernize@latest -test ./...
+      - run: go run golang.org/x/tools/cmd/deadcode@latest -test ./...
