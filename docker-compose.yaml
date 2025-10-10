@@ -15,7 +15,7 @@ services:
     command: ["--", "--port=8080"]
 
   doc:
-    image: swaggerapi/swagger-ui:v5.17.14
+    image: swaggerapi/swagger-ui:v5.29.4
     depends_on:
       app:
         condition: service_healthy
