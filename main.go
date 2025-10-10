@@ -19,6 +19,8 @@ import (
 	"runtime/debug"
 	"syscall"
 	"time"
+
+	"github.com/raeperd/realworld.go/internal/api"
 )
 
 func main() {
@@ -131,6 +133,8 @@ func route(log *slog.Logger, version string) http.Handler {
 	mux.Handle("GET /health", handleGetHealth(version))
 	mux.Handle("GET /openapi.yaml", handleGetOpenAPI(version))
 	mux.Handle("/debug/", handleGetDebug())
+
+	mux.HandleFunc("POST /api/users", api.HandlePostUsers)
 
 	handler := accesslog(mux, log)
 	handler = recovery(handler, log)
