@@ -102,7 +102,7 @@ func TestGetOpenAPI(t *testing.T) {
 		testNil(t, err)
 	})
 
-	testContains(t, "openapi: 3.1.0", sb.String())
+	testContains(t, "openapi: 3.0.1", sb.String())
 	testContains(t, "version: ", sb.String())
 }
 
