@@ -16,11 +16,15 @@ jobs:
       - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
+      - uses: sqlc-dev/setup-sqlc@v3
+        with:
+          sqlc-version: '1.30.0'
       - name: check go mod
         run: |
           go mod download
           go mod tidy
           git diff --exit-code go.mod go.sum
+          sqlc diff
       - run: make build VERSION=${{ github.ref_name }}
       - run: make test
       - uses: shogo82148/actions-goveralls@v1
