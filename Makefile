@@ -27,7 +27,7 @@ watch:
 clean:
 	rm -rf coverage.txt $(TARGET_EXEC) 
 
-IMAGE := ghcr.io/raeperd/kickstart
+IMAGE := ghcr.io/raeperd/realworld.go
 DOCKER_VERSION := $(if $(VERSION),$(subst /,-,$(VERSION)),latest)
 
 docker:
