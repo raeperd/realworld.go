@@ -83,6 +83,15 @@ func run(ctx context.Context, w io.Writer, args []string, version string) error 
 	if _, err := db.ExecContext(ctx, ddl); err != nil {
 		return err
 	}
+	
+	// TEMPORARY DEBUG: Verify database schema is ready
+	fmt.Printf("DEBUG: Database schema initialized, verifying table exists...\n")
+	var count int
+	if err := db.QueryRowContext(ctx, "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='users'").Scan(&count); err != nil {
+		fmt.Printf("DEBUG: Error checking users table: %v\n", err)
+		return err
+	}
+	fmt.Printf("DEBUG: Users table exists: %v\n", count == 1)
 
 	server := &http.Server{
 		Addr:              fmt.Sprintf(":%d", port),
