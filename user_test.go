@@ -8,8 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/raeperd/realworld.go/internal/auth"
 	"github.com/raeperd/test"
+
+	"github.com/raeperd/realworld.go/internal/auth"
 )
 
 func TestPostUsers_Validation(t *testing.T) {

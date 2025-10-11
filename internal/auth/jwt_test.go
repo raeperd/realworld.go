@@ -3,8 +3,9 @@ package auth_test
 import (
 	"testing"
 
-	"github.com/raeperd/realworld.go/internal/auth"
 	"github.com/raeperd/test"
+
+	"github.com/raeperd/realworld.go/internal/auth"
 )
 
 func TestGenerateToken_WithValidInputs_ReturnsToken(t *testing.T) {
