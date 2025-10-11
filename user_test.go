@@ -5,11 +5,25 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/raeperd/realworld.go/internal/auth"
 )
+
+var testUserCounter int64
+
+func uniqueUserData(prefix string) UserPostRequestBody {
+	id := atomic.AddInt64(&testUserCounter, 1)
+	timestamp := time.Now().UnixNano()
+	unique := fmt.Sprintf("%s-%d-%d", prefix, id, timestamp%1000000)
+	return UserPostRequestBody{
+		Username: unique,
+		Email:    fmt.Sprintf("%s@test.com", unique),
+		Password: "testpass",
+	}
+}
 
 func TestPostUsers_Validation(t *testing.T) {
 	t.Parallel()
@@ -47,11 +61,7 @@ func TestPostUsers_Validation(t *testing.T) {
 func TestPostUsers_CreateUser(t *testing.T) {
 	t.Parallel()
 
-	req := UserPostRequestBody{
-		Username: "test",
-		Email:    "test@test.com",
-		Password: "test",
-	}
+	req := uniqueUserData("createuser")
 	res := httpPostUsers(t, req)
 	testEqual(t, http.StatusCreated, res.StatusCode)
 	t.Cleanup(func() { _ = res.Body.Close() })
@@ -69,13 +79,8 @@ func TestPostUsers_CreateUser(t *testing.T) {
 func TestPostUsers_ReturnsValidJWT(t *testing.T) {
 	t.Parallel()
 
-	// Given - use unique email to avoid conflicts in parallel tests
-	timestamp := time.Now().UnixNano()
-	req := UserPostRequestBody{
-		Username: fmt.Sprintf("jwtuser%d", timestamp),
-		Email:    fmt.Sprintf("jwt%d@test.com", timestamp),
-		Password: "jwtpass",
-	}
+	// Given
+	req := uniqueUserData("jwtuser")
 
 	// When
 	res := httpPostUsers(t, req)
