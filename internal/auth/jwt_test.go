@@ -16,7 +16,6 @@ func TestGenerateToken_WithValidInputs_ReturnsToken(t *testing.T) {
 
 	// When
 	token, err := auth.GenerateToken(userID, username, secret)
-
 	// Then
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
@@ -42,7 +41,6 @@ func TestParseToken_WithValidToken_ReturnsCorrectClaims(t *testing.T) {
 
 	// When
 	claims, err := auth.ParseToken(token, secret)
-
 	// Then
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
