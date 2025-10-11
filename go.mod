@@ -2,7 +2,10 @@ module github.com/raeperd/realworld.go
 
 go 1.24
 
-require modernc.org/sqlite v1.39.0
+require (
+	github.com/golang-jwt/jwt/v5 v5.3.0
+	modernc.org/sqlite v1.39.0
+)
 
 require (
 	github.com/dustin/go-humanize v1.0.1 // indirect

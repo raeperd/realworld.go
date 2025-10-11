@@ -3,8 +3,12 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"testing"
+	"time"
+
+	"github.com/raeperd/realworld.go/internal/auth"
 )
 
 func TestPostUsers_Validation(t *testing.T) {
@@ -43,10 +47,12 @@ func TestPostUsers_Validation(t *testing.T) {
 func TestPostUsers_CreateUser(t *testing.T) {
 	t.Parallel()
 
+	// Generate unique username/email per test run to avoid conflicts
+	unique := fmt.Sprintf("%d", time.Now().UnixNano())
 	req := UserPostRequestBody{
-		Username: "test",
-		Email:    "test@test.com",
-		Password: "test",
+		Username: "create_test_user_" + unique,
+		Email:    fmt.Sprintf("create_test_%s@example.com", unique),
+		Password: "testpass",
 	}
 	res := httpPostUsers(t, req)
 	testEqual(t, http.StatusCreated, res.StatusCode)
@@ -60,6 +66,42 @@ func TestPostUsers_CreateUser(t *testing.T) {
 	res = httpPostUsers(t, req) // return conflict when user already exists
 	testEqual(t, http.StatusConflict, res.StatusCode)
 	t.Cleanup(func() { _ = res.Body.Close() })
+}
+
+func TestPostUsers_ReturnsValidJWT(t *testing.T) {
+	t.Parallel()
+
+	// Given - generate unique username/email per test run to avoid conflicts
+	unique := fmt.Sprintf("%d", time.Now().UnixNano())
+	req := UserPostRequestBody{
+		Username: "jwt_test_user_" + unique,
+		Email:    fmt.Sprintf("jwt_test_%s@example.org", unique),
+		Password: "testpass",
+	}
+
+	// When
+	res := httpPostUsers(t, req)
+	testEqual(t, http.StatusCreated, res.StatusCode)
+	t.Cleanup(func() { _ = res.Body.Close() })
+
+	var response UserResponseBody
+	testNil(t, json.NewDecoder(res.Body).Decode(&response))
+
+	// Then - token should not be the placeholder
+	if response.Token == "token" {
+		t.Fatal("expected real JWT token, got placeholder")
+	}
+
+	// Then - token should be parseable as valid JWT
+	claims, err := auth.ParseToken(response.Token, "test-secret") // TODO: use actual secret
+	testNil(t, err)
+
+	// Then - JWT should contain correct user data
+	testEqual(t, req.Username, claims.Username)
+	// UserID should be > 0 (actual DB ID, not placeholder)
+	if claims.UserID <= 0 {
+		t.Errorf("expected positive userID, got %d", claims.UserID)
+	}
 }
 
 func httpPostUsers(t *testing.T, request UserPostRequestBody) *http.Response {

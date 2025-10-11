@@ -9,10 +9,11 @@ import (
 	"log/slog"
 	"net/http"
 
+	"github.com/raeperd/realworld.go/internal/auth"
 	"github.com/raeperd/realworld.go/internal/sqlite"
 )
 
-func HandlePostUsers(db *sql.DB) func(w http.ResponseWriter, r *http.Request) {
+func HandlePostUsers(db *sql.DB, jwtSecret string) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var request userPostRequestBody
 		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
@@ -35,10 +36,17 @@ func HandlePostUsers(db *sql.DB) func(w http.ResponseWriter, r *http.Request) {
 
 		queries := sqlite.New(tx)
 		user, err := queries.GetUserByEmail(r.Context(), request.User.Email)
-		if !errors.Is(err, sql.ErrNoRows) {
+		if err == nil {
+			// User found, return conflict
 			encodeErrorResponse(r.Context(), http.StatusConflict, []error{fmt.Errorf("user with email %s already exists", request.User.Email)}, w)
 			return
 		}
+		if !errors.Is(err, sql.ErrNoRows) {
+			// Database error (like "no such table"), return internal server error
+			encodeErrorResponse(r.Context(), http.StatusInternalServerError, []error{err}, w)
+			return
+		}
+		// User not found (sql.ErrNoRows), proceed to create
 
 		user, err = queries.CreateUser(r.Context(), sqlite.CreateUserParams{
 			Username: request.User.Username,
@@ -54,9 +62,16 @@ func HandlePostUsers(db *sql.DB) func(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		// Generate JWT token
+		token, err := auth.GenerateToken(user.ID, user.Username, jwtSecret)
+		if err != nil {
+			encodeErrorResponse(r.Context(), http.StatusInternalServerError, []error{err}, w)
+			return
+		}
+
 		encodeResponse(r.Context(), http.StatusCreated, userPostResponseBody{
 			Email:    user.Email,
-			Token:    "token", // TODO: generate token
+			Token:    token,
 			Username: user.Username,
 			Bio:      user.Bio.String,
 			Image:    user.Image.String,

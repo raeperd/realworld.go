@@ -48,9 +48,13 @@ var ddl string
 // [blog post]: https://grafana.com/blog/2024/02/09/how-i-write-http-services-in-go-after-13-years
 func run(ctx context.Context, w io.Writer, args []string, version string) error {
 	var port uint
+	var jwtSecret string
+	var dbPath string
 	fs := flag.NewFlagSet(args[0], flag.ExitOnError)
 	fs.SetOutput(w)
 	fs.UintVar(&port, "port", 8080, "port for HTTP API")
+	fs.StringVar(&jwtSecret, "jwt-secret", "default-secret", "JWT signing secret")
+	fs.StringVar(&dbPath, "db", "", "database connection string (empty for in-memory)")
 	if err := fs.Parse(args[1:]); err != nil {
 		return err
 	}
@@ -73,8 +77,21 @@ func run(ctx context.Context, w io.Writer, args []string, version string) error 
 
 	slog.SetDefault(slog.New(slog.NewJSONHandler(w, nil)))
 
-	db, err := sql.Open("sqlite", ":memory:")
+	// Use file database if provided, otherwise in-memory
+	dbConnection := ":memory:"
+	if dbPath != "" {
+		dbConnection = dbPath
+	}
+
+	db, err := sql.Open("sqlite", dbConnection)
 	if err != nil {
+		return err
+	}
+
+	// Limit to single connection to prevent SQLite locking issues with parallel tests
+	db.SetMaxOpenConns(1)
+
+	if _, err := db.ExecContext(ctx, "PRAGMA foreign_keys=ON"); err != nil {
 		return err
 	}
 
@@ -84,7 +101,7 @@ func run(ctx context.Context, w io.Writer, args []string, version string) error 
 
 	server := &http.Server{
 		Addr:              fmt.Sprintf(":%d", port),
-		Handler:           route(slog.Default(), version, db),
+		Handler:           route(slog.Default(), version, db, jwtSecret),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
@@ -144,13 +161,13 @@ func run(ctx context.Context, w io.Writer, args []string, version string) error 
 // route sets up and returns an [http.Handler] for all the server routes.
 // It is the single source of truth for all the routes.
 // You can add custom [http.Handler] as needed.
-func route(log *slog.Logger, version string, db *sql.DB) http.Handler {
+func route(log *slog.Logger, version string, db *sql.DB, jwtSecret string) http.Handler {
 	mux := http.NewServeMux()
 	mux.Handle("GET /health", handleGetHealth(version))
 	mux.Handle("GET /openapi.yaml", handleGetOpenAPI(version))
 	mux.Handle("/debug/", handleGetDebug())
 
-	mux.HandleFunc("POST /api/users", api.HandlePostUsers(db))
+	mux.HandleFunc("POST /api/users", api.HandlePostUsers(db, jwtSecret))
 
 	handler := accesslog(mux, log)
 	handler = recovery(handler, log)
