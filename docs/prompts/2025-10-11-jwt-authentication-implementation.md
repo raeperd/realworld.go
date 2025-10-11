@@ -1,5 +1,7 @@
 # JWT Authentication Implementation - October 11, 2025
 
+**Pull Request:** https://github.com/raeperd/realworld.go/pull/3
+
 ## Original User Request Context
 
 ### Initial Request
