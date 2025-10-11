@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"flag"
+	"fmt"
 	"io"
 	"log"
 	"log/slog"
@@ -12,6 +13,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
@@ -33,9 +35,19 @@ func TestMain(m *testing.M) {
 		return strconv.Itoa(addr.Port)
 	}()
 
+	// Create temporary directory for test database (will be cleaned up automatically)
+	tempDir, err := os.MkdirTemp("", "realworld-test-*")
+	if err != nil {
+		log.Fatalf("failed to create temp dir: %v", err)
+	}
+	// Note: Cleanup handled manually before os.Exit
+
+	// Create unique database file name with more entropy to avoid conflicts
+	dbPath := filepath.Join(tempDir, fmt.Sprintf("test-%d-%d.db", time.Now().UnixNano(), os.Getpid()))
+
 	ctx, cancel := context.WithCancel(context.Background())
 	go func() { // Start the server in a goroutine
-		if err := run(ctx, os.Stdout, []string{"test", "--port", port, "--jwt-secret", "test-secret"}, "vtest"); err != nil {
+		if err := run(ctx, os.Stdout, []string{"test", "--port", port, "--jwt-secret", "test-secret", "--db", dbPath}, "vtest"); err != nil {
 			cancel()
 			log.Fatal(err)
 		}
@@ -54,6 +66,9 @@ func TestMain(m *testing.M) {
 
 	exitCode := m.Run()
 	cancel()
+
+	// Manual cleanup before os.Exit (defer won't run due to os.Exit)
+	_ = os.RemoveAll(tempDir)
 	os.Exit(exitCode)
 }
 

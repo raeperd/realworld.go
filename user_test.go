@@ -3,8 +3,10 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/raeperd/realworld.go/internal/auth"
 )
@@ -45,9 +47,11 @@ func TestPostUsers_Validation(t *testing.T) {
 func TestPostUsers_CreateUser(t *testing.T) {
 	t.Parallel()
 
+	// Generate unique username/email per test run to avoid conflicts
+	unique := fmt.Sprintf("%d", time.Now().UnixNano())
 	req := UserPostRequestBody{
-		Username: "createuser",
-		Email:    "createuser@test.com",
+		Username: "create_test_user_" + unique,
+		Email:    fmt.Sprintf("create_test_%s@example.com", unique),
 		Password: "testpass",
 	}
 	res := httpPostUsers(t, req)
@@ -67,10 +71,11 @@ func TestPostUsers_CreateUser(t *testing.T) {
 func TestPostUsers_ReturnsValidJWT(t *testing.T) {
 	t.Parallel()
 
-	// Given
+	// Given - generate unique username/email per test run to avoid conflicts
+	unique := fmt.Sprintf("%d", time.Now().UnixNano())
 	req := UserPostRequestBody{
-		Username: "jwtuser",
-		Email:    "jwtuser@test.com",
+		Username: "jwt_test_user_" + unique,
+		Email:    fmt.Sprintf("jwt_test_%s@example.org", unique),
 		Password: "testpass",
 	}
 

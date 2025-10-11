@@ -88,16 +88,9 @@ func run(ctx context.Context, w io.Writer, args []string, version string) error 
 		return err
 	}
 
-	// Configure SQLite for concurrent access
-	if _, err := db.ExecContext(ctx, "PRAGMA journal_mode=WAL"); err != nil {
-		return err
-	}
-	if _, err := db.ExecContext(ctx, "PRAGMA synchronous=NORMAL"); err != nil {
-		return err
-	}
-	if _, err := db.ExecContext(ctx, "PRAGMA cache_size=1000"); err != nil {
-		return err
-	}
+	// Limit to single connection to prevent SQLite locking issues with parallel tests
+	db.SetMaxOpenConns(1)
+
 	if _, err := db.ExecContext(ctx, "PRAGMA foreign_keys=ON"); err != nil {
 		return err
 	}
