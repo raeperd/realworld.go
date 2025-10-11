@@ -36,10 +36,17 @@ func HandlePostUsers(db *sql.DB, jwtSecret string) func(w http.ResponseWriter, r
 
 		queries := sqlite.New(tx)
 		user, err := queries.GetUserByEmail(r.Context(), request.User.Email)
-		if !errors.Is(err, sql.ErrNoRows) {
+		if err == nil {
+			// User found, return conflict
 			encodeErrorResponse(r.Context(), http.StatusConflict, []error{fmt.Errorf("user with email %s already exists", request.User.Email)}, w)
 			return
 		}
+		if !errors.Is(err, sql.ErrNoRows) {
+			// Database error (like "no such table"), return internal server error
+			encodeErrorResponse(r.Context(), http.StatusInternalServerError, []error{err}, w)
+			return
+		}
+		// User not found (sql.ErrNoRows), proceed to create
 
 		user, err = queries.CreateUser(r.Context(), sqlite.CreateUserParams{
 			Username: request.User.Username,
