@@ -29,14 +29,12 @@ func HandlePostUsers(db *sql.DB, jwtSecret string) func(w http.ResponseWriter, r
 
 		tx, err := db.BeginTx(r.Context(), nil)
 		if err != nil {
-			fmt.Printf("DEBUG: Transaction begin error: %v\n", err)
 			encodeErrorResponse(r.Context(), http.StatusInternalServerError, []error{err}, w)
 			return
 		}
 		defer func() { _ = tx.Rollback() }()
 
 		queries := sqlite.New(tx)
-		fmt.Printf("DEBUG: Starting GetUserByEmail for %s\n", request.User.Email)
 		user, err := queries.GetUserByEmail(r.Context(), request.User.Email)
 		if err == nil {
 			// User found, return conflict

@@ -49,10 +49,12 @@ var ddl string
 func run(ctx context.Context, w io.Writer, args []string, version string) error {
 	var port uint
 	var jwtSecret string
+	var dbPath string
 	fs := flag.NewFlagSet(args[0], flag.ExitOnError)
 	fs.SetOutput(w)
 	fs.UintVar(&port, "port", 8080, "port for HTTP API")
 	fs.StringVar(&jwtSecret, "jwt-secret", "default-secret", "JWT signing secret")
+	fs.StringVar(&dbPath, "db", "", "database connection string (empty for in-memory)")
 	if err := fs.Parse(args[1:]); err != nil {
 		return err
 	}
@@ -75,23 +77,34 @@ func run(ctx context.Context, w io.Writer, args []string, version string) error 
 
 	slog.SetDefault(slog.New(slog.NewJSONHandler(w, nil)))
 
-	db, err := sql.Open("sqlite", ":memory:")
+	// Use file database if provided, otherwise in-memory
+	dbConnection := ":memory:"
+	if dbPath != "" {
+		dbConnection = dbPath
+	}
+
+	db, err := sql.Open("sqlite", dbConnection)
 	if err != nil {
+		return err
+	}
+
+	// Configure SQLite for concurrent access
+	if _, err := db.ExecContext(ctx, "PRAGMA journal_mode=WAL"); err != nil {
+		return err
+	}
+	if _, err := db.ExecContext(ctx, "PRAGMA synchronous=NORMAL"); err != nil {
+		return err
+	}
+	if _, err := db.ExecContext(ctx, "PRAGMA cache_size=1000"); err != nil {
+		return err
+	}
+	if _, err := db.ExecContext(ctx, "PRAGMA foreign_keys=ON"); err != nil {
 		return err
 	}
 
 	if _, err := db.ExecContext(ctx, ddl); err != nil {
 		return err
 	}
-	
-	// TEMPORARY DEBUG: Verify database schema is ready
-	fmt.Printf("DEBUG: Database schema initialized, verifying table exists...\n")
-	var count int
-	if err := db.QueryRowContext(ctx, "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='users'").Scan(&count); err != nil {
-		fmt.Printf("DEBUG: Error checking users table: %v\n", err)
-		return err
-	}
-	fmt.Printf("DEBUG: Users table exists: %v\n", count == 1)
 
 	server := &http.Server{
 		Addr:              fmt.Sprintf(":%d", port),
