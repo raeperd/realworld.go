@@ -3,27 +3,11 @@ package main
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"net/http"
-	"sync/atomic"
 	"testing"
-	"time"
 
 	"github.com/raeperd/realworld.go/internal/auth"
 )
-
-var testUserCounter int64
-
-func uniqueUserData(prefix string) UserPostRequestBody {
-	id := atomic.AddInt64(&testUserCounter, 1)
-	timestamp := time.Now().UnixNano()
-	unique := fmt.Sprintf("%s-%d-%d", prefix, id, timestamp%1000000)
-	return UserPostRequestBody{
-		Username: unique,
-		Email:    fmt.Sprintf("%s@test.com", unique),
-		Password: "testpass",
-	}
-}
 
 func TestPostUsers_Validation(t *testing.T) {
 	t.Parallel()
@@ -61,7 +45,11 @@ func TestPostUsers_Validation(t *testing.T) {
 func TestPostUsers_CreateUser(t *testing.T) {
 	t.Parallel()
 
-	req := uniqueUserData("createuser")
+	req := UserPostRequestBody{
+		Username: "createuser",
+		Email:    "createuser@test.com",
+		Password: "testpass",
+	}
 	res := httpPostUsers(t, req)
 	testEqual(t, http.StatusCreated, res.StatusCode)
 	t.Cleanup(func() { _ = res.Body.Close() })
@@ -80,7 +68,11 @@ func TestPostUsers_ReturnsValidJWT(t *testing.T) {
 	t.Parallel()
 
 	// Given
-	req := uniqueUserData("jwtuser")
+	req := UserPostRequestBody{
+		Username: "jwtuser",
+		Email:    "jwtuser@test.com",
+		Password: "testpass",
+	}
 
 	// When
 	res := httpPostUsers(t, req)
