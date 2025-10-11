@@ -35,7 +35,7 @@ func TestMain(m *testing.M) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	go func() { // Start the server in a goroutine
-		if err := run(ctx, os.Stdout, []string{"test", "--port", port}, "vtest"); err != nil {
+		if err := run(ctx, os.Stdout, []string{"test", "--port", port, "--jwt-secret", "test-secret"}, "vtest"); err != nil {
 			cancel()
 			log.Fatal(err)
 		}
