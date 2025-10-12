@@ -25,6 +25,14 @@ import (
 func TestMain(m *testing.M) {
 	flag.Parse() // NOTE: this is needed to parse args from go test command
 
+	// Create a temporary file for the test database
+	tmpFile, err := os.CreateTemp("", "test-*.db")
+	if err != nil {
+		log.Fatalf("failed to create temp file: %v", err)
+	}
+	dbPath := tmpFile.Name()
+	tmpFile.Close() //nolint:errcheck
+
 	port := func() string { // Get a free port to run the server
 		listener, err := net.Listen("tcp", ":0")
 		if err != nil {
@@ -37,7 +45,7 @@ func TestMain(m *testing.M) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	go func() { // Start the server in a goroutine
-		if err := run(ctx, os.Stdout, []string{"test", "--port", port, "--jwt-secret", "test-secret"}, "vtest"); err != nil {
+		if err := run(ctx, os.Stdout, []string{"test", "--port", port, "--jwt-secret", "test-secret", "--db", dbPath}, "vtest"); err != nil {
 			cancel()
 			log.Fatal(err)
 		}
@@ -56,6 +64,7 @@ func TestMain(m *testing.M) {
 
 	exitCode := m.Run()
 	cancel()
+	os.Remove(dbPath) //nolint:errcheck
 	os.Exit(exitCode)
 }
 
