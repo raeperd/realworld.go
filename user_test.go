@@ -227,6 +227,38 @@ func TestPostUsersLogin_Success(t *testing.T) {
 	test.NotEqual(t, "", response.Token)
 }
 
+func TestPostUsersLogin_ReturnsValidJWT(t *testing.T) {
+	t.Parallel()
+
+	// Setup: Create user via registration
+	unique := fmt.Sprintf("%d", time.Now().UnixNano())
+	email := fmt.Sprintf("jwt_login_test_%s@example.com", unique)
+	password := "testpass123"
+
+	regReq := UserPostRequestBody{
+		Username: "jwt_login_user_" + unique,
+		Email:    email,
+		Password: password,
+	}
+	regRes := httpPostUsers(t, regReq)
+	test.Equal(t, http.StatusCreated, regRes.StatusCode)
+	t.Cleanup(func() { _ = regRes.Body.Close() })
+
+	// Test: Login and verify JWT
+	loginRes := httpPostUsersLogin(t, email, password)
+	test.Equal(t, http.StatusOK, loginRes.StatusCode)
+	t.Cleanup(func() { _ = loginRes.Body.Close() })
+
+	var response UserResponseBody
+	test.Nil(t, json.NewDecoder(loginRes.Body).Decode(&response))
+
+	// Verify JWT token is valid and contains correct data
+	claims, err := auth.ParseToken(response.Token, "test-secret")
+	test.Nil(t, err)
+	test.Equal(t, regReq.Username, claims.Username)
+	test.True(t, claims.UserID > 0)
+}
+
 func httpPostUsersLogin(t *testing.T, email, password string) *http.Response {
 	t.Helper()
 
