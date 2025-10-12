@@ -244,6 +244,29 @@ func TestCORSPreflightRequest(t *testing.T) {
 	// TODO: Add Access-Control-Allow-Methods, Access-Control-Allow-Headers, Access-Control-Max-Age
 }
 
+// TestCORSActualRequests tests CORS headers are present on actual requests
+func TestCORSActualRequests(t *testing.T) {
+	t.Parallel()
+
+	t.Run("GET request", func(t *testing.T) {
+		t.Parallel()
+		res, err := http.Get(endpoint + "/health")
+		test.Nil(t, err)
+		t.Cleanup(func() { _ = res.Body.Close() })
+
+		test.Equal(t, "*", res.Header.Get("Access-Control-Allow-Origin"))
+	})
+
+	t.Run("POST request", func(t *testing.T) {
+		t.Parallel()
+		res, err := http.Post(endpoint+"/api/users", "application/json", bytes.NewBuffer([]byte("{}")))
+		test.Nil(t, err)
+		t.Cleanup(func() { _ = res.Body.Close() })
+
+		test.Equal(t, "*", res.Header.Get("Access-Control-Allow-Origin"))
+	})
+}
+
 func httpOptions(t *testing.T, path string) *http.Response {
 	t.Helper()
 
