@@ -3,8 +3,8 @@
 A guide for implementing the user login endpoint following Test-Driven Development and Kent Beck's Tidy First principles.
 
 ## Status & Links
-- **Status**: In Progress
-- **PR Link**: (will be added when created)
+- **Status**: Complete ✅
+- **PR Link**: https://github.com/raeperd/realworld.go/pull/9
 
 ## Context
 
