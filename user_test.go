@@ -131,3 +131,53 @@ type UserResponseBody struct {
 	Bio      string `json:"bio"`
 	Image    string `json:"image"`
 }
+
+func TestPostUsersLogin_Validation(t *testing.T) {
+	t.Parallel()
+
+	testcases := map[string]struct {
+		email    string
+		password string
+	}{
+		"email required": {
+			email:    "",
+			password: "testpass",
+		},
+		"password required": {
+			email:    "test@test.com",
+			password: "",
+		},
+	}
+
+	for name, tc := range testcases {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			res := httpPostUsersLogin(t, tc.email, tc.password)
+			test.Equal(t, http.StatusUnprocessableEntity, res.StatusCode)
+
+			t.Cleanup(func() { _ = res.Body.Close() })
+		})
+	}
+}
+
+func httpPostUsersLogin(t *testing.T, email, password string) *http.Response {
+	t.Helper()
+
+	requestBody := struct {
+		User struct {
+			Email    string `json:"email"`
+			Password string `json:"password"`
+		} `json:"user"`
+	}{}
+	requestBody.User.Email = email
+	requestBody.User.Password = password
+
+	body, err := json.Marshal(requestBody)
+	test.Nil(t, err)
+
+	res, err := http.Post(endpoint+"/api/users/login", "application/json", bytes.NewBuffer(body))
+	test.Nil(t, err)
+
+	return res
+}
