@@ -197,6 +197,36 @@ func TestPostUsersLogin_WrongPassword(t *testing.T) {
 	t.Cleanup(func() { _ = loginRes.Body.Close() })
 }
 
+func TestPostUsersLogin_Success(t *testing.T) {
+	t.Parallel()
+
+	// Setup: Create user via registration
+	unique := fmt.Sprintf("%d", time.Now().UnixNano())
+	email := fmt.Sprintf("login_test_%s@example.com", unique)
+	password := "testpass123"
+
+	regReq := UserPostRequestBody{
+		Username: "login_user_" + unique,
+		Email:    email,
+		Password: password,
+	}
+	regRes := httpPostUsers(t, regReq)
+	test.Equal(t, http.StatusCreated, regRes.StatusCode)
+	t.Cleanup(func() { _ = regRes.Body.Close() })
+
+	// Test: Login with correct credentials
+	loginRes := httpPostUsersLogin(t, email, password)
+	test.Equal(t, http.StatusOK, loginRes.StatusCode)
+	t.Cleanup(func() { _ = loginRes.Body.Close() })
+
+	// Verify response
+	var response UserResponseBody
+	test.Nil(t, json.NewDecoder(loginRes.Body).Decode(&response))
+	test.Equal(t, email, response.Email)
+	test.Equal(t, regReq.Username, response.Username)
+	test.NotEqual(t, "", response.Token)
+}
+
 func httpPostUsersLogin(t *testing.T, email, password string) *http.Response {
 	t.Helper()
 
