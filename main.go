@@ -170,7 +170,8 @@ func route(log *slog.Logger, version string, db *sql.DB, jwtSecret string) http.
 
 	mux.HandleFunc("POST /api/users", api.HandlePostUsers(db, jwtSecret))
 
-	handler := accesslog(mux, log)
+	handler := cors(mux)
+	handler = accesslog(handler, log)
 	handler = recovery(handler, log)
 	return handler
 }
@@ -305,6 +306,23 @@ func recovery(next http.Handler, log *slog.Logger) http.Handler {
 			http.Error(w, fmt.Sprint(err), http.StatusInternalServerError)
 		}()
 		next.ServeHTTP(&wr, r)
+	})
+}
+
+// cors is a middleware that handles CORS (Cross-Origin Resource Sharing) for the API.
+// It allows all origins to access the API endpoints, which is necessary for RealWorld frontend compatibility.
+// TODO: Add Access-Control-Allow-Methods, Access-Control-Allow-Headers, Access-Control-Max-Age
+func cors(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+
+		// Handle preflight OPTIONS requests
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+
+		next.ServeHTTP(w, r)
 	})
 }
 
