@@ -114,6 +114,36 @@ When extending the server:
 3. **Configuration**: Use environment variables, add to run() parameters if needed
 4. **External Dependencies**: Consider if truly necessary - this template values simplicity
 
+## Agentic Coding Plans
+
+For complex features requiring planning, create detailed implementation plans in `docs/prompts/` directory.
+
+### Plan Document Guidelines
+
+**Location**: `docs/prompts/YYYY-MM-DD-feature-name.md`
+
+**Required Sections**:
+1. **Status & Links**: Implementation status and PR link (when created)
+2. **Context**: Original user request and clarifications
+3. **Methodology**: TDD principles, commit discipline, testing approach
+4. **Implementation Steps**: Detailed, reproducible steps with checkboxes
+5. **Code Patterns**: Reference implementations and examples
+6. **Success Criteria**: Checklist of what defines completion
+
+**Key Principles**:
+- **Reproducibility**: Another developer should be able to follow the plan exactly
+- **Version History**: Update plan with what actually happened vs planned
+- **Reusability**: Write as a guide that can be adapted to other repositories
+- **Minimal Details**: Focus on methodology, avoid repo-specific git hashes/diffs
+
+**Example**:
+```
+docs/prompts/2025-10-12-cors-middleware-implementation.md
+docs/prompts/2025-10-11-jwt-authentication-implementation.md
+```
+
+See existing plans in `docs/prompts/` for reference templates.
+
 ## Docker Development
 
 The docker-compose setup includes:
