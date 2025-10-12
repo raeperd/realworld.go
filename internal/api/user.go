@@ -141,3 +141,40 @@ type errorResponseBody struct {
 		Body []string `json:"body"`
 	} `json:"errors"`
 }
+
+func HandlePostUsersLogin(db *sql.DB, jwtSecret string) func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var request userLoginRequestBody
+		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		defer func() { _ = r.Body.Close() }()
+
+		if errs := request.Validate(); len(errs) > 0 {
+			encodeErrorResponse(r.Context(), http.StatusUnprocessableEntity, errs, w)
+			return
+		}
+
+		// TODO: Implement authentication logic
+		encodeErrorResponse(r.Context(), http.StatusNotImplemented, []error{errors.New("not implemented")}, w)
+	}
+}
+
+type userLoginRequestBody struct {
+	User struct {
+		Email    string `json:"email"`
+		Password string `json:"password"`
+	} `json:"user"`
+}
+
+func (u userLoginRequestBody) Validate() []error {
+	var errs []error
+	if u.User.Email == "" {
+		errs = append(errs, errors.New("email is required"))
+	}
+	if u.User.Password == "" {
+		errs = append(errs, errors.New("password is required"))
+	}
+	return errs
+}
