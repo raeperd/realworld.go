@@ -238,7 +238,6 @@ func handleGetOpenAPI(version string) http.HandlerFunc {
 	body := bytes.Replace(openAPI, []byte("${{ VERSION }}"), []byte(version), 1)
 	return func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/yaml")
-		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write(body)
 	}
