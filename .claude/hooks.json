@@ -1,0 +1,14 @@
+{
+  "tool_post_hooks": [
+    {
+      "tool_name": "Edit",
+      "file_pattern": "**/*.go",
+      "command": "make lint"
+    },
+    {
+      "tool_name": "Write",
+      "file_pattern": "**/*.go",
+      "command": "make lint"
+    }
+  ]
+}

@@ -16,6 +16,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/raeperd/test"
 )
 
 // TestMain starts the server and runs all the tests.
@@ -75,14 +77,14 @@ func TestGetHealth(t *testing.T) {
 
 	// actual http request to the server.
 	res, err := http.Get(endpoint + "/health")
-	testNil(t, err)
+	test.Nil(t, err)
 	t.Cleanup(func() {
 		err = res.Body.Close()
-		testNil(t, err)
+		test.Nil(t, err)
 	})
-	testEqual(t, http.StatusOK, res.StatusCode)
-	testEqual(t, "application/json", res.Header.Get("Content-Type"))
-	testNil(t, json.NewDecoder(res.Body).Decode(&response{}))
+	test.Equal(t, http.StatusOK, res.StatusCode)
+	test.Equal(t, "application/json", res.Header.Get("Content-Type"))
+	test.Nil(t, json.NewDecoder(res.Body).Decode(&response{}))
 }
 
 // TestGetOpenAPI tests the /openapi.yaml endpoint.
@@ -90,20 +92,20 @@ func TestGetHealth(t *testing.T) {
 func TestGetOpenAPI(t *testing.T) {
 	t.Parallel()
 	res, err := http.Get(endpoint + "/openapi.yaml")
-	testNil(t, err)
-	testEqual(t, http.StatusOK, res.StatusCode)
-	testEqual(t, "application/yaml", res.Header.Get("Content-Type"))
+	test.Nil(t, err)
+	test.Equal(t, http.StatusOK, res.StatusCode)
+	test.Equal(t, "application/yaml", res.Header.Get("Content-Type"))
 
 	sb := strings.Builder{}
 	_, err = io.Copy(&sb, res.Body)
-	testNil(t, err)
+	test.Nil(t, err)
 	t.Cleanup(func() {
 		err = res.Body.Close()
-		testNil(t, err)
+		test.Nil(t, err)
 	})
 
-	testContains(t, "openapi: 3.0.1", sb.String())
-	testContains(t, "version: ", sb.String())
+	test.Contains(t, sb.String(), "openapi: 3.0.1")
+	test.Contains(t, sb.String(), "version: ")
 }
 
 // TestAccessLogMiddleware tests accesslog middleware
@@ -157,13 +159,13 @@ func TestAccessLogMiddleware(t *testing.T) {
 
 			var log record
 			err := json.NewDecoder(strings.NewReader(buffer.String())).Decode(&log)
-			testNil(t, err)
+			test.Nil(t, err)
 
-			testEqual(t, tt.Method, log.Method)
-			testEqual(t, tt.Path, log.Path)
-			testEqual(t, strings.TrimPrefix(tt.Query, "?"), log.Query)
-			testEqual(t, len(tt.body), log.Bytes)
-			testEqual(t, tt.Status, log.Status)
+			test.Equal(t, tt.Method, log.Method)
+			test.Equal(t, tt.Path, log.Path)
+			test.Equal(t, strings.TrimPrefix(tt.Query, "?"), log.Query)
+			test.Equal(t, len(tt.body), log.Bytes)
+			test.Equal(t, tt.Status, log.Status)
 		})
 	}
 }
@@ -215,29 +217,10 @@ func TestRecoveryMiddleware(t *testing.T) {
 			rec := httptest.NewRecorder()
 			handler.ServeHTTP(rec, req)
 
-			testEqual(t, tt.wantCode, rec.Code)
+			test.Equal(t, tt.wantCode, rec.Code)
 			if tt.wantPanic {
-				testContains(t, "panic!", buffer.String())
+				test.Contains(t, buffer.String(), "panic!")
 			}
 		})
-	}
-}
-
-func testEqual[T comparable](tb testing.TB, want, got T) {
-	tb.Helper()
-	if want != got {
-		tb.Fatalf("want: %v; got: %v", want, got)
-	}
-}
-
-func testNil(tb testing.TB, err error) {
-	tb.Helper()
-	testEqual(tb, nil, err)
-}
-
-func testContains(tb testing.TB, needle string, haystack string) {
-	tb.Helper()
-	if !strings.Contains(haystack, needle) {
-		tb.Fatalf("%q not in %q", needle, haystack)
 	}
 }

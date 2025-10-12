@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/raeperd/test"
+
 	"github.com/raeperd/realworld.go/internal/auth"
 )
 
@@ -37,7 +39,7 @@ func TestPostUsers_Validation(t *testing.T) {
 			t.Parallel()
 
 			res := httpPostUsers(t, tc)
-			testEqual(t, http.StatusUnprocessableEntity, res.StatusCode)
+			test.Equal(t, http.StatusUnprocessableEntity, res.StatusCode)
 
 			t.Cleanup(func() { _ = res.Body.Close() })
 		})
@@ -55,16 +57,16 @@ func TestPostUsers_CreateUser(t *testing.T) {
 		Password: "testpass",
 	}
 	res := httpPostUsers(t, req)
-	testEqual(t, http.StatusCreated, res.StatusCode)
+	test.Equal(t, http.StatusCreated, res.StatusCode)
 	t.Cleanup(func() { _ = res.Body.Close() })
 
 	var response UserResponseBody
-	testNil(t, json.NewDecoder(res.Body).Decode(&response))
-	testEqual(t, req.Username, response.Username)
-	testEqual(t, req.Email, response.Email)
+	test.Nil(t, json.NewDecoder(res.Body).Decode(&response))
+	test.Equal(t, req.Username, response.Username)
+	test.Equal(t, req.Email, response.Email)
 
 	res = httpPostUsers(t, req) // return conflict when user already exists
-	testEqual(t, http.StatusConflict, res.StatusCode)
+	test.Equal(t, http.StatusConflict, res.StatusCode)
 	t.Cleanup(func() { _ = res.Body.Close() })
 }
 
@@ -81,37 +83,33 @@ func TestPostUsers_ReturnsValidJWT(t *testing.T) {
 
 	// When
 	res := httpPostUsers(t, req)
-	testEqual(t, http.StatusCreated, res.StatusCode)
+	test.Equal(t, http.StatusCreated, res.StatusCode)
 	t.Cleanup(func() { _ = res.Body.Close() })
 
 	var response UserResponseBody
-	testNil(t, json.NewDecoder(res.Body).Decode(&response))
+	test.Nil(t, json.NewDecoder(res.Body).Decode(&response))
 
 	// Then - token should not be the placeholder
-	if response.Token == "token" {
-		t.Fatal("expected real JWT token, got placeholder")
-	}
+	test.NotEqual(t, "token", response.Token)
 
 	// Then - token should be parseable as valid JWT
 	claims, err := auth.ParseToken(response.Token, "test-secret") // TODO: use actual secret
-	testNil(t, err)
+	test.Nil(t, err)
 
 	// Then - JWT should contain correct user data
-	testEqual(t, req.Username, claims.Username)
+	test.Equal(t, req.Username, claims.Username)
 	// UserID should be > 0 (actual DB ID, not placeholder)
-	if claims.UserID <= 0 {
-		t.Errorf("expected positive userID, got %d", claims.UserID)
-	}
+	test.True(t, claims.UserID > 0)
 }
 
 func httpPostUsers(t *testing.T, request UserPostRequestBody) *http.Response {
 	t.Helper()
 
 	body, err := json.Marshal(UserWrapper[UserPostRequestBody]{User: request})
-	testNil(t, err)
+	test.Nil(t, err)
 
 	res, err := http.Post(endpoint+"/api/users", "application/json", bytes.NewBuffer(body))
-	testNil(t, err)
+	test.Nil(t, err)
 
 	return res
 }
