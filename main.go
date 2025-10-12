@@ -170,7 +170,8 @@ func route(log *slog.Logger, version string, db *sql.DB, jwtSecret string) http.
 
 	mux.HandleFunc("POST /api/users", api.HandlePostUsers(db, jwtSecret))
 
-	handler := accesslog(mux, log)
+	handler := cors(mux)
+	handler = accesslog(handler, log)
 	handler = recovery(handler, log)
 	return handler
 }
@@ -187,7 +188,7 @@ func handleGetHealth(version string) http.HandlerFunc {
 		DirtyBuild     bool      `json:"DirtyBuild"`
 	}
 
-	res := responseBody{Version: version}
+	baseRes := responseBody{Version: version}
 	buildInfo, _ := debug.ReadBuildInfo()
 	for _, kv := range buildInfo.Settings {
 		if kv.Value == "" {
@@ -195,11 +196,11 @@ func handleGetHealth(version string) http.HandlerFunc {
 		}
 		switch kv.Key {
 		case "vcs.revision":
-			res.LastCommitHash = kv.Value
+			baseRes.LastCommitHash = kv.Value
 		case "vcs.time":
-			res.LastCommitTime, _ = time.Parse(time.RFC3339, kv.Value)
+			baseRes.LastCommitTime, _ = time.Parse(time.RFC3339, kv.Value)
 		case "vcs.modified":
-			res.DirtyBuild = kv.Value == "true"
+			baseRes.DirtyBuild = kv.Value == "true"
 		}
 	}
 
@@ -208,6 +209,7 @@ func handleGetHealth(version string) http.HandlerFunc {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 
+		res := baseRes // Create a copy for each request to avoid data race
 		res.Uptime = time.Since(up).String()
 		if err := json.NewEncoder(w).Encode(res); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -237,7 +239,6 @@ func handleGetOpenAPI(version string) http.HandlerFunc {
 	body := bytes.Replace(openAPI, []byte("${{ VERSION }}"), []byte(version), 1)
 	return func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/yaml")
-		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write(body)
 	}
@@ -305,6 +306,23 @@ func recovery(next http.Handler, log *slog.Logger) http.Handler {
 			http.Error(w, fmt.Sprint(err), http.StatusInternalServerError)
 		}()
 		next.ServeHTTP(&wr, r)
+	})
+}
+
+// cors is a middleware that handles CORS (Cross-Origin Resource Sharing) for the API.
+// It allows all origins to access the API endpoints, which is necessary for RealWorld frontend compatibility.
+// TODO: Add Access-Control-Allow-Methods, Access-Control-Allow-Headers, Access-Control-Max-Age
+func cors(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+
+		// Handle preflight OPTIONS requests
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+
+		next.ServeHTTP(w, r)
 	})
 }
 

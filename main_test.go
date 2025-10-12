@@ -233,3 +233,50 @@ func TestRecoveryMiddleware(t *testing.T) {
 		})
 	}
 }
+
+// TestCORSPreflightRequest tests CORS middleware handles OPTIONS preflight requests
+func TestCORSPreflightRequest(t *testing.T) {
+	t.Parallel()
+
+	res := httpOptions(t, "/api/users")
+	t.Cleanup(func() { _ = res.Body.Close() })
+
+	test.Equal(t, http.StatusOK, res.StatusCode)
+	test.Equal(t, "*", res.Header.Get("Access-Control-Allow-Origin"))
+	// TODO: Add Access-Control-Allow-Methods, Access-Control-Allow-Headers, Access-Control-Max-Age
+}
+
+// TestCORSActualRequests tests CORS headers are present on actual requests
+func TestCORSActualRequests(t *testing.T) {
+	t.Parallel()
+
+	t.Run("GET request", func(t *testing.T) {
+		t.Parallel()
+		res, err := http.Get(endpoint + "/health")
+		test.Nil(t, err)
+		t.Cleanup(func() { _ = res.Body.Close() })
+
+		test.Equal(t, "*", res.Header.Get("Access-Control-Allow-Origin"))
+	})
+
+	t.Run("POST request", func(t *testing.T) {
+		t.Parallel()
+		res, err := http.Post(endpoint+"/api/users", "application/json", bytes.NewBuffer([]byte("{}")))
+		test.Nil(t, err)
+		t.Cleanup(func() { _ = res.Body.Close() })
+
+		test.Equal(t, "*", res.Header.Get("Access-Control-Allow-Origin"))
+	})
+}
+
+func httpOptions(t *testing.T, path string) *http.Response {
+	t.Helper()
+
+	req, err := http.NewRequest(http.MethodOptions, endpoint+path, nil)
+	test.Nil(t, err)
+
+	res, err := http.DefaultClient.Do(req)
+	test.Nil(t, err)
+
+	return res
+}
