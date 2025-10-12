@@ -1,22 +1,12 @@
-# CORS Middleware Implementation - October 12, 2025
+# CORS Middleware Implementation with TDD
 
-**Status:** Completed
+A guide for implementing CORS middleware following Test-Driven Development and Kent Beck's Tidy First principles.
 
-**Pull Request:** https://github.com/raeperd/realworld.go/pull/7
+## Implementation Philosophy
 
-## Original User Request Context
+**Minimal Approach**: Start with essential CORS support (`Access-Control-Allow-Origin: *`) and add complexity only when needed.
 
-### Initial Request
-```
-plan to add CORS middleware in @main.go in TDD way
-first checkout to new branch feat-cors
-```
-
-### Project Context
-- RealWorld API specification requires CORS for frontend interoperability
-- README.md already claims "CORS Support: Cross-origin resource sharing enabled" (line 42)
-- Currently only OpenAPI endpoint has a single CORS header (`Access-Control-Allow-Origin: *`)
-- Need proper CORS middleware following existing patterns (accesslog, recovery)
+**TDD Cycle**: Always follow Red → Green → Refactor
 
 ---
 
@@ -70,87 +60,85 @@ You are a senior software engineer who follows Kent Beck's Test-Driven Developme
 - Use httptest.NewRequest and httptest.NewRecorder for middleware unit tests
 - Follow RealWorld API specifications exactly
 
-# CORS IMPLEMENTATION REQUIREMENTS
+# CORS IMPLEMENTATION REQUIREMENTS (ACTUAL)
 
-## Required CORS Headers
+## Implemented CORS Headers (Minimal Approach)
 
 ### Preflight Requests (OPTIONS method)
-- `Access-Control-Allow-Origin: *` - Allow all origins for demo app
-- `Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS` - All methods used by RealWorld
-- `Access-Control-Allow-Headers: Content-Type, Authorization` - Headers used by RealWorld API
-- `Access-Control-Max-Age: 86400` - Cache preflight for 24 hours
-- Return `200 OK` status
+- ✅ `Access-Control-Allow-Origin: *` - Allow all origins for demo app
+- ✅ Return `200 OK` status
+- ⏳ TODO: `Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS`
+- ⏳ TODO: `Access-Control-Allow-Headers: Content-Type, Authorization`
+- ⏳ TODO: `Access-Control-Max-Age: 86400` (cache preflight for 24 hours)
 
 ### Actual Requests (GET, POST, PUT, DELETE)
-- `Access-Control-Allow-Origin: *` - Allow all origins
+- ✅ `Access-Control-Allow-Origin: *` - Allow all origins
 
-## Middleware Design
-- Follow existing middleware pattern (function returning http.Handler)
-- Process OPTIONS requests and return early with 200 OK
-- Add CORS headers to all requests (including non-OPTIONS)
-- Should be added to middleware chain in route() function
-- Must work with responseRecorder (used by accesslog middleware)
+**Design Decision**: Keep implementation minimal for this iteration. Additional headers can be added later when needed.
 
-# TEST-DRIVEN IMPLEMENTATION ORDER
+## Middleware Design (As Implemented)
+- ✅ Follow existing middleware pattern (function returning http.Handler)
+- ✅ Process OPTIONS requests and return early with 200 OK
+- ✅ Add CORS headers to all requests (including non-OPTIONS)
+- ✅ Added to middleware chain in route() function (before accesslog)
+- ✅ Works with responseRecorder (used by accesslog middleware)
 
-Each step follows: Write failing test → Make it pass → Refactor if needed
+# TEST-DRIVEN IMPLEMENTATION STEPS
 
-## Phase 1: Preflight Handling
+Follow these steps in order. Each step follows: Write failing test → Make it pass → Refactor if needed
 
-### 1. [ ] Test: CORS middleware handles OPTIONS preflight request
-   - Write test `TestCORSMiddleware_PreflightRequest` in main_test.go
-   - Verify OPTIONS request returns 200 OK
-   - Verify Access-Control-Allow-Origin header is set
-   - Verify Access-Control-Allow-Methods header is set
-   - Verify Access-Control-Allow-Headers header is set
-   - Verify Access-Control-Max-Age header is set
+## Phase 1: Preflight Handling (RED → GREEN)
 
-### 2. [ ] Implementation: Basic CORS middleware for OPTIONS
-   - Create `cors()` middleware function in main.go
-   - Check if request method is OPTIONS
-   - Set required CORS headers
-   - Return 200 OK for OPTIONS
-   - Call next handler for non-OPTIONS
-   - **Run test** to confirm it passes (GREEN)
-   - **Commit**: "test: add failing test for CORS preflight handling" (RED phase commit)
-   - **Commit**: "feat: implement basic CORS preflight handling" (GREEN phase commit)
+### Step 1: Write failing test for OPTIONS preflight
+- [ ] Create `TestCORSPreflightRequest` test function
+- [ ] Create `httpOptions()` helper function (or use httptest if preferred)
+- [ ] Verify OPTIONS request returns 200 OK
+- [ ] Verify Access-Control-Allow-Origin header is set to "*"
+- [ ] Add TODO comment for additional headers (minimal approach)
+- [ ] Run test - should FAIL (RED phase)
+- [ ] Commit: "test: add failing test for CORS preflight handling"
 
-## Phase 2: Actual Request Headers
+### Step 2: Implement basic CORS middleware
+- [ ] Create `cors()` middleware function
+- [ ] Set `Access-Control-Allow-Origin: *` for all requests
+- [ ] Handle OPTIONS method by returning early with 200 OK
+- [ ] Integrate into route() middleware chain (before accesslog)
+- [ ] Run test - should PASS (GREEN phase)
+- [ ] Commit: "feat: implement basic CORS middleware for OPTIONS requests"
 
-### 3. [ ] Test: CORS middleware adds headers to actual requests
-   - Write test `TestCORSMiddleware_ActualRequest` in main_test.go
-   - Test GET request includes Access-Control-Allow-Origin header
-   - Test POST request includes Access-Control-Allow-Origin header
-   - Test PUT request includes Access-Control-Allow-Origin header
-   - Test DELETE request includes Access-Control-Allow-Origin header
+## Phase 2: Verify All Request Types
 
-### 4. [ ] Implementation: CORS headers on all requests
-   - Enhance `cors()` middleware to set headers before calling next handler
-   - **Run test** to confirm it passes (GREEN)
-   - **Commit**: "test: add failing test for CORS headers on actual requests" (RED phase commit)
-   - **Commit**: "feat: add CORS headers to all requests" (GREEN phase commit)
+### Step 3: Test CORS headers on actual requests
+- [ ] Create `TestCORSActualRequests` with subtests for GET and POST
+- [ ] Verify headers present on different HTTP methods
+- [ ] Test may pass immediately if middleware already sets headers globally
+- [ ] Commit: "test: verify CORS headers on actual requests"
 
-## Phase 3: Integration & Cleanup
+## Phase 3: Refactoring & Cleanup
 
-### 5. [ ] Structural: Integrate middleware and remove duplicates
-   - Add `cors()` middleware to route() function chain (before accesslog)
-   - Remove duplicate `Access-Control-Allow-Origin` header from handleGetOpenAPI
-   - **Run all tests** to verify behavior unchanged
-   - **Commit**: "refactor: integrate CORS middleware and remove duplicate header"
+### Step 4: Remove duplicate headers (Tidy First)
+- [ ] Search for duplicate `Access-Control-Allow-Origin` headers in code
+- [ ] Remove duplicates (middleware now handles it globally)
+- [ ] Run all tests to verify behavior unchanged
+- [ ] Commit: "refactor: remove duplicate CORS headers"
 
-### 6. [ ] Integration Test: Verify CORS works end-to-end
-   - Write test `TestGetOpenAPI_HasCORSHeaders` to verify OpenAPI endpoint
-   - Write test `TestPostUsers_HasCORSHeaders` to verify API endpoint
-   - **Run all tests** including integration tests
-   - **Commit**: "test: add integration tests for CORS headers"
+### Step 5: Fix any linter issues
+- [ ] Run linter (`make lint` or equivalent)
+- [ ] Fix any warnings (e.g., unclosed response bodies)
+- [ ] Commit: "fix: resolve linter warnings"
 
-## Phase 4: Verification
+## Phase 4: Final Verification
 
-### 7. [ ] Final verification
-   - Run full test suite: `make test`
-   - Run linter: `make lint`
-   - Manual verification with curl
-   - All tests pass with `t.Parallel()`
+### Step 6: Comprehensive testing
+- [ ] Run full test suite with race detection
+- [ ] Run linter
+- [ ] Manual verification with curl or browser
+- [ ] All tests pass with `t.Parallel()`
+
+**Common Issues to Watch For:**
+- Data races in concurrent handlers (use `-race` flag)
+- Unclosed response bodies in tests
+- Pre-existing duplicate CORS headers
 
 # MIDDLEWARE PATTERN REFERENCE
 
@@ -175,10 +163,41 @@ handler = recovery(handler, log)
 
 # TEST PATTERN REFERENCE
 
-Based on TestAccessLogMiddleware and TestRecoveryMiddleware:
+## Option 1: Integration Test (Real HTTP Requests)
+
+**Recommended for consistency with existing integration tests.**
 
 ```go
-func TestCORSMiddleware_PreflightRequest(t *testing.T) {
+// TestCORSPreflightRequest tests CORS middleware handles OPTIONS preflight requests
+func TestCORSPreflightRequest(t *testing.T) {
+    t.Parallel()
+
+    res := httpOptions(t, "/api/users")
+    defer res.Body.Close()
+
+    if res.StatusCode != http.StatusOK {
+        t.Errorf("want 200, got %d", res.StatusCode)
+    }
+    if got := res.Header.Get("Access-Control-Allow-Origin"); got != "*" {
+        t.Errorf("want *, got %s", got)
+    }
+}
+
+// Helper function for OPTIONS requests
+func httpOptions(t *testing.T, path string) *http.Response {
+    t.Helper()
+    req, _ := http.NewRequest(http.MethodOptions, endpoint+path, nil)
+    res, _ := http.DefaultClient.Do(req)
+    return res
+}
+```
+
+## Option 2: Unit Test (httptest)
+
+**Faster but tests middleware in isolation.**
+
+```go
+func TestCORSMiddleware(t *testing.T) {
     t.Parallel()
 
     handler := cors(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -189,11 +208,16 @@ func TestCORSMiddleware_PreflightRequest(t *testing.T) {
     rec := httptest.NewRecorder()
     handler.ServeHTTP(rec, req)
 
-    test.Equal(t, http.StatusOK, rec.Code)
-    test.Equal(t, "*", rec.Header().Get("Access-Control-Allow-Origin"))
-    // ... more assertions
+    if rec.Code != http.StatusOK {
+        t.Errorf("want 200, got %d", rec.Code)
+    }
+    if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "*" {
+        t.Errorf("want *, got %s", got)
+    }
 }
 ```
+
+**Choose based on your project's testing style.**
 
 # EXAMPLE WORKFLOW
 
@@ -232,41 +256,50 @@ make test
 make lint
 ```
 
-# EXPECTED CHANGES
+# EXPECTED SCOPE
 
 ## Files to Modify
-- `main.go` - Add cors() middleware function (~20 lines)
-- `main_test.go` - Add TestCORSMiddleware tests (~80-100 lines)
+- Main server file (e.g., `main.go`) - Add cors() middleware function (~15-20 lines)
+- Test file (e.g., `main_test.go`) - Add test functions (~40-50 lines)
 
-## Code Metrics
-- Total lines added: ~100-120 lines
-- Functions added: 1 (cors middleware)
-- Tests added: 3-4 test functions
-- Commits expected: 6-8 commits following TDD cycle
+## Expected Metrics
+- Total implementation: ~60-70 lines of code
+- Functions added: 2 (cors middleware, test helper)
+- Tests added: 2 test functions minimum
+- Commits: 5-7 commits following TDD cycle
+- Coverage: Should increase slightly (depends on existing coverage)
 
 # CORS SPECIFICATION REFERENCE
 
-RealWorld API requires CORS for:
-- Frontend applications (React, Angular, Vue) running on different origins
-- Swagger UI documentation interface
-- Development environments with different ports
+## Why CORS is Needed
 
-Standard CORS headers:
-- `Access-Control-Allow-Origin`: Which origins can access
-- `Access-Control-Allow-Methods`: Which HTTP methods are allowed
-- `Access-Control-Allow-Headers`: Which headers can be sent
-- `Access-Control-Max-Age`: How long to cache preflight response
+Web APIs need CORS when:
+- Frontend applications run on different origins (different domains/ports)
+- Interactive documentation interfaces (Swagger/OpenAPI UI)
+- Development environments with different ports (frontend:3000, backend:8080)
+
+## Standard CORS Headers
+
+**Minimal (Start Here)**:
+- `Access-Control-Allow-Origin: *` - Allow all origins (use specific origin in production)
+
+**Complete (Add When Needed)**:
+- `Access-Control-Allow-Methods` - Which HTTP methods are allowed (GET, POST, PUT, DELETE, OPTIONS)
+- `Access-Control-Allow-Headers` - Which headers can be sent (Content-Type, Authorization)
+- `Access-Control-Max-Age` - How long to cache preflight response (86400 = 24 hours)
 
 # SUCCESS CRITERIA
 
-- [x] All tests pass with `t.Parallel()`
-- [x] CORS middleware handles OPTIONS preflight requests
-- [x] CORS headers present on all API endpoints
-- [x] Duplicate header removed from handleGetOpenAPI
-- [x] Integration tests verify end-to-end functionality
-- [x] Linter passes with no warnings
-- [x] README.md claim "CORS Support" is now accurate
-- [x] Code follows existing middleware patterns
-- [x] Commits follow TDD cycle (RED → GREEN → Refactor)
+- [ ] All tests pass with `t.Parallel()`
+- [ ] CORS middleware handles OPTIONS preflight requests
+- [ ] CORS headers present on all API endpoints
+- [ ] Duplicate headers removed from existing handlers
+- [ ] Integration tests verify end-to-end functionality
+- [ ] Linter passes with no warnings
+- [ ] No data races detected (`go test -race`)
+- [ ] Code follows existing middleware patterns
+- [ ] Commits follow TDD cycle (RED → GREEN → Refactor)
 
-Follow this process precisely, always prioritizing clean, well-tested code over quick implementation. Always write one test at a time, make it run, then improve structure.
+---
+
+**Remember**: Prioritize clean, well-tested code over quick implementation. Always write one test at a time, make it run, then improve structure.
