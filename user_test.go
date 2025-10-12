@@ -173,6 +173,30 @@ func TestPostUsersLogin_UserNotFound(t *testing.T) {
 	t.Cleanup(func() { _ = res.Body.Close() })
 }
 
+func TestPostUsersLogin_WrongPassword(t *testing.T) {
+	t.Parallel()
+
+	// Setup: Create user via registration
+	unique := fmt.Sprintf("%d", time.Now().UnixNano())
+	email := fmt.Sprintf("wrongpw_test_%s@example.com", unique)
+	correctPassword := "correctpass123"
+
+	regReq := UserPostRequestBody{
+		Username: "wrongpw_user_" + unique,
+		Email:    email,
+		Password: correctPassword,
+	}
+	regRes := httpPostUsers(t, regReq)
+	test.Equal(t, http.StatusCreated, regRes.StatusCode)
+	t.Cleanup(func() { _ = regRes.Body.Close() })
+
+	// Test: Login with wrong password
+	wrongPassword := "wrongpassword"
+	loginRes := httpPostUsersLogin(t, email, wrongPassword)
+	test.Equal(t, http.StatusUnauthorized, loginRes.StatusCode)
+	t.Cleanup(func() { _ = loginRes.Body.Close() })
+}
+
 func httpPostUsersLogin(t *testing.T, email, password string) *http.Response {
 	t.Helper()
 
