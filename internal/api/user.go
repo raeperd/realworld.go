@@ -176,7 +176,13 @@ func HandlePostUsersLogin(db *sql.DB, jwtSecret string) func(w http.ResponseWrit
 			return
 		}
 
-		// TODO: Verify password and generate token
+		// Verify password (plain text comparison for now)
+		if user.Password != request.User.Password {
+			encodeErrorResponse(r.Context(), http.StatusUnauthorized, []error{errors.New("invalid credentials")}, w)
+			return
+		}
+
+		// TODO: Generate token and return success response
 		_ = user
 		encodeErrorResponse(r.Context(), http.StatusNotImplemented, []error{errors.New("not implemented")}, w)
 	}
