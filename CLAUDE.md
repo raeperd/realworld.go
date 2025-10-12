@@ -125,16 +125,16 @@ For complex features requiring planning, create detailed implementation plans in
 **Required Sections**:
 1. **Status & Links**: Implementation status and PR link (when created)
 2. **Context**: Original user request and clarifications
-3. **Methodology**: TDD principles, commit discipline, testing approach
-4. **Implementation Steps**: Detailed, reproducible steps with checkboxes
-5. **Code Patterns**: Reference implementations and examples
-6. **Success Criteria**: Checklist of what defines completion
+3. **Methodology**: Reference `@docs/prompts/TDD.md` (avoid repeating TDD content)
+4. **Feature-Specific Requirements**: Only the unique requirements for this feature
+5. **Implementation Steps**: Detailed, reproducible steps with checkboxes
+6. **Verification Commands**: Commands to test and validate the implementation
 
 **Key Principles**:
+- **Conciseness**: Reference `@TDD.md` instead of repeating TDD methodology
 - **Reproducibility**: Another developer should be able to follow the plan exactly
-- **Version History**: Update plan with what actually happened vs planned
 - **Reusability**: Write as a guide that can be adapted to other repositories
-- **Minimal Details**: Focus on methodology, avoid repo-specific git hashes/diffs
+- **Minimal Details**: Focus on feature-specific requirements, not general methodology
 
 **Example**:
 ```
