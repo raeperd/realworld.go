@@ -182,9 +182,25 @@ func HandlePostUsersLogin(db *sql.DB, jwtSecret string) func(w http.ResponseWrit
 			return
 		}
 
-		// TODO: Generate token and return success response
-		_ = user
-		encodeErrorResponse(r.Context(), http.StatusNotImplemented, []error{errors.New("not implemented")}, w)
+		// Generate JWT token
+		token, err := auth.GenerateToken(user.ID, user.Username, jwtSecret)
+		if err != nil {
+			encodeErrorResponse(r.Context(), http.StatusInternalServerError, []error{err}, w)
+			return
+		}
+
+		if err := tx.Commit(); err != nil {
+			encodeErrorResponse(r.Context(), http.StatusInternalServerError, []error{err}, w)
+			return
+		}
+
+		encodeResponse(r.Context(), http.StatusOK, userPostResponseBody{
+			Email:    user.Email,
+			Token:    token,
+			Username: user.Username,
+			Bio:      user.Bio.String,
+			Image:    user.Image.String,
+		}, w)
 	}
 }
 
