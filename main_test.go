@@ -239,6 +239,8 @@ func TestCORSPreflightRequest(t *testing.T) {
 	t.Parallel()
 
 	res := httpOptions(t, "/api/users")
+	t.Cleanup(func() { _ = res.Body.Close() })
+
 	test.Equal(t, http.StatusOK, res.StatusCode)
 	test.Equal(t, "*", res.Header.Get("Access-Control-Allow-Origin"))
 	// TODO: Add Access-Control-Allow-Methods, Access-Control-Allow-Headers, Access-Control-Max-Age
@@ -275,10 +277,6 @@ func httpOptions(t *testing.T, path string) *http.Response {
 
 	res, err := http.DefaultClient.Do(req)
 	test.Nil(t, err)
-	t.Cleanup(func() {
-		err = res.Body.Close()
-		test.Nil(t, err)
-	})
 
 	return res
 }
