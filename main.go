@@ -87,6 +87,7 @@ func run(ctx context.Context, w io.Writer, args []string, version string) error 
 	if err != nil {
 		return err
 	}
+	defer db.Close() //nolint:errcheck
 
 	// Limit to single connection to prevent SQLite locking issues with parallel tests
 	db.SetMaxOpenConns(1)
