@@ -4,7 +4,6 @@ on:
       - 'v*'
     branches:
       - main
-      - ci-deploy-failed  # Temporary: testing permissions fix
     paths:
       - '**/*.go'
       - 'go.mod'
