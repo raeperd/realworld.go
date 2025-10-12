@@ -4,6 +4,7 @@ on:
       - 'v*'
     branches:
       - main
+      - ci-deploy-failed  # Temporary: testing permissions fix
     paths:
       - '**/*.go'
       - 'go.mod'
@@ -14,6 +15,10 @@ on:
 
 env:
   REGISTRY_IMAGE: ghcr.io/raeperd/realworld.go
+
+permissions:
+  contents: read      # Required to checkout code
+  packages: write     # Required to push to GHCR
 
 jobs:
   build:
