@@ -161,6 +161,18 @@ func TestPostUsersLogin_Validation(t *testing.T) {
 	}
 }
 
+func TestPostUsersLogin_UserNotFound(t *testing.T) {
+	t.Parallel()
+
+	// Attempt login with email that doesn't exist
+	unique := fmt.Sprintf("%d", time.Now().UnixNano())
+	email := fmt.Sprintf("nonexistent_%s@example.com", unique)
+
+	res := httpPostUsersLogin(t, email, "anypassword")
+	test.Equal(t, http.StatusUnauthorized, res.StatusCode)
+	t.Cleanup(func() { _ = res.Body.Close() })
+}
+
 func httpPostUsersLogin(t *testing.T, email, password string) *http.Response {
 	t.Helper()
 
