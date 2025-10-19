@@ -141,3 +141,83 @@ type errorResponseBody struct {
 		Body []string `json:"body"`
 	} `json:"errors"`
 }
+
+func HandlePostUsersLogin(db *sql.DB, jwtSecret string) func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var request userLoginRequestBody
+		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		defer func() { _ = r.Body.Close() }()
+
+		if errs := request.Validate(); len(errs) > 0 {
+			encodeErrorResponse(r.Context(), http.StatusUnprocessableEntity, errs, w)
+			return
+		}
+
+		tx, err := db.BeginTx(r.Context(), nil)
+		if err != nil {
+			encodeErrorResponse(r.Context(), http.StatusInternalServerError, []error{err}, w)
+			return
+		}
+		defer func() { _ = tx.Rollback() }()
+
+		queries := sqlite.New(tx)
+		user, err := queries.GetUserByEmail(r.Context(), request.User.Email)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				// User not found - return 401 with generic message
+				encodeErrorResponse(r.Context(), http.StatusUnauthorized, []error{errors.New("invalid credentials")}, w)
+				return
+			}
+			// Database error
+			encodeErrorResponse(r.Context(), http.StatusInternalServerError, []error{err}, w)
+			return
+		}
+
+		// Verify password (plain text comparison for now)
+		if user.Password != request.User.Password {
+			encodeErrorResponse(r.Context(), http.StatusUnauthorized, []error{errors.New("invalid credentials")}, w)
+			return
+		}
+
+		// Generate JWT token
+		token, err := auth.GenerateToken(user.ID, user.Username, jwtSecret)
+		if err != nil {
+			encodeErrorResponse(r.Context(), http.StatusInternalServerError, []error{err}, w)
+			return
+		}
+
+		if err := tx.Commit(); err != nil {
+			encodeErrorResponse(r.Context(), http.StatusInternalServerError, []error{err}, w)
+			return
+		}
+
+		encodeResponse(r.Context(), http.StatusOK, userPostResponseBody{
+			Email:    user.Email,
+			Token:    token,
+			Username: user.Username,
+			Bio:      user.Bio.String,
+			Image:    user.Image.String,
+		}, w)
+	}
+}
+
+type userLoginRequestBody struct {
+	User struct {
+		Email    string `json:"email"`
+		Password string `json:"password"`
+	} `json:"user"`
+}
+
+func (u userLoginRequestBody) Validate() []error {
+	var errs []error
+	if u.User.Email == "" {
+		errs = append(errs, errors.New("email is required"))
+	}
+	if u.User.Password == "" {
+		errs = append(errs, errors.New("password is required"))
+	}
+	return errs
+}
