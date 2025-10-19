@@ -2,8 +2,8 @@
 
 ## Status & Links
 
-**Status**: In Progress
-**PR Link**: TBD
+**Status**: Completed ✅
+**PR Link**: https://github.com/raeperd/realworld.go/pull/15
 
 ## Context
 
