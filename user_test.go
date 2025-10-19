@@ -321,7 +321,7 @@ func TestGetUser_Success(t *testing.T) {
 func httpGetUser(t *testing.T, token string) *http.Response {
 	t.Helper()
 
-	req, err := http.NewRequest("GET", endpoint+"/api/user", nil)
+	req, err := http.NewRequest(http.MethodGet, endpoint+"/api/user", nil)
 	test.Nil(t, err)
 
 	req.Header.Set("Authorization", "Token "+token)
@@ -346,7 +346,7 @@ func TestGetUser_MissingToken(t *testing.T) {
 	t.Parallel()
 
 	// Test without Authorization header
-	req, err := http.NewRequest("GET", endpoint+"/api/user", nil)
+	req, err := http.NewRequest(http.MethodGet, endpoint+"/api/user", nil)
 	test.Nil(t, err)
 
 	res, err := http.DefaultClient.Do(req)

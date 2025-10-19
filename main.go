@@ -22,8 +22,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/raeperd/realworld.go/internal/auth"
 	_ "modernc.org/sqlite"
+
+	"github.com/raeperd/realworld.go/internal/auth"
 )
 
 func main() {
