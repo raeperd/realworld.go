@@ -22,11 +22,11 @@ github.com/remyoudompheng/bigfft
 # golang.org/x/exp v0.0.0-20250620022241-b7579e27df2b
 ## explicit; go 1.23.0
 golang.org/x/exp/constraints
-# golang.org/x/sys v0.34.0
-## explicit; go 1.23.0
+# golang.org/x/sys v0.36.0
+## explicit; go 1.24.0
 golang.org/x/sys/unix
 golang.org/x/sys/windows
-# modernc.org/libc v1.66.3
+# modernc.org/libc v1.66.10
 ## explicit; go 1.23.0
 modernc.org/libc
 modernc.org/libc/errno
@@ -60,7 +60,7 @@ modernc.org/mathutil
 # modernc.org/memory v1.11.0
 ## explicit; go 1.23.0
 modernc.org/memory
-# modernc.org/sqlite v1.39.0
-## explicit; go 1.23.0
+# modernc.org/sqlite v1.39.1
+## explicit; go 1.24.0
 modernc.org/sqlite
 modernc.org/sqlite/lib
