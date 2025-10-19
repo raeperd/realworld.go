@@ -61,6 +61,8 @@ docker buildx build --platform linux/amd64,linux/arm64 -t kickstart.go .
 ### RealWorld API Implementation
 This implementation follows the [RealWorld API specification](https://github.com/gothinkster/realworld) exactly, enabling frontend interoperability with React, Angular, Vue, and other RealWorld frontends.
 
+**API Specification Reference**: See `docs/spec.md` for the complete endpoint specifications, request/response formats, and error handling requirements that must be implemented.
+
 ### Single-File Design (from kickstart.go template)
 The entire server implementation resides in `main.go` with a clear structure:
 1. **main()** - Entry point that calls run() with dependencies
@@ -114,9 +116,14 @@ When extending the server:
 3. **Configuration**: Use environment variables, add to run() parameters if needed
 4. **External Dependencies**: Consider if truly necessary - this template values simplicity
 
-## Agentic Coding Plans
+## Implementation Plans & History
 
-For complex features requiring planning, create detailed implementation plans in `docs/prompts/` directory.
+**IMPORTANT**: Before implementing any new feature, check `docs/prompts/` directory for:
+- Existing implementation plans and their approach
+- Historical context and decisions made
+- Examples of successful TDD workflows used in this project
+
+When planning a new feature implementation, **always create a new plan document** in `docs/prompts/YYYY-MM-DD-feature-name.md` before starting work.
 
 ### Plan Document Guidelines
 
@@ -131,18 +138,15 @@ For complex features requiring planning, create detailed implementation plans in
 6. **Verification Commands**: Commands to test and validate the implementation
 
 **Key Principles**:
-- **Conciseness**: Reference `@TDD.md` instead of repeating TDD methodology
+- **Conciseness**: Reference `@docs/prompts/TDD.md` instead of repeating TDD methodology
 - **Reproducibility**: Another developer should be able to follow the plan exactly
 - **Reusability**: Write as a guide that can be adapted to other repositories
 - **Minimal Details**: Focus on feature-specific requirements, not general methodology
 
-**Example**:
-```
-docs/prompts/2025-10-12-cors-middleware-implementation.md
-docs/prompts/2025-10-11-jwt-authentication-implementation.md
-```
-
-See existing plans in `docs/prompts/` for reference templates.
+**Example Plans** (see `docs/prompts/` for full content):
+- `2025-10-12-login-endpoint-implementation.md` - POST /api/users/login endpoint
+- `2025-10-12-cors-middleware-implementation.md` - CORS middleware with TDD
+- `2025-10-11-jwt-authentication-implementation.md` - JWT authentication setup
 
 ## Docker Development
 
