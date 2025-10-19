@@ -5,7 +5,7 @@ WORKDIR /src
 
 COPY . .
 
-RUN CGO_ENABLED=0 go build -o app -ldflags '-w -X main.Version=${VERSION}' .
+RUN make build TARGET_EXEC=app VERSION=${VERSION}
 
 FROM scratch
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/

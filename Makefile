@@ -5,7 +5,7 @@ VERSION := local
 default: clean build lint test 
 
 build:
-	go build -o $(TARGET_EXEC) -ldflags '-w -X main.Version=$(VERSION)' .
+	CGO_ENABLED=0 go build -o $(TARGET_EXEC) -ldflags '-w -X main.Version=$(VERSION)' .
 
 test:
 	go test -shuffle=on -race -coverprofile=coverage.txt ./...
