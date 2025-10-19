@@ -1,6 +1,8 @@
 module github.com/raeperd/realworld.go
 
-go 1.24
+go 1.24.2
+
+toolchain go1.24.9
 
 require (
 	github.com/golang-jwt/jwt/v5 v5.3.0
