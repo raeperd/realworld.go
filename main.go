@@ -336,7 +336,7 @@ func authenticate(next http.Handler, jwtSecret string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		authHeader := r.Header.Get("Authorization")
 		if authHeader == "" {
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			encodeErrorResponse(r.Context(), http.StatusUnauthorized, []error{errors.New("missing authorization header")}, w)
 			return
 		}
 
@@ -344,14 +344,14 @@ func authenticate(next http.Handler, jwtSecret string) http.Handler {
 		tokenString := strings.TrimPrefix(authHeader, "Token ")
 		if tokenString == authHeader {
 			// "Token " prefix not found
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			encodeErrorResponse(r.Context(), http.StatusUnauthorized, []error{errors.New("invalid authorization header format")}, w)
 			return
 		}
 
 		// Parse and validate token
 		claims, err := auth.ParseToken(tokenString, jwtSecret)
 		if err != nil {
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			encodeErrorResponse(r.Context(), http.StatusUnauthorized, []error{errors.New("invalid or expired token")}, w)
 			return
 		}
 
