@@ -22,8 +22,6 @@ import (
 	"time"
 
 	_ "modernc.org/sqlite"
-
-	"github.com/raeperd/realworld.go/internal/api"
 )
 
 func main() {
@@ -168,8 +166,8 @@ func route(log *slog.Logger, version string, db *sql.DB, jwtSecret string) http.
 	mux.Handle("GET /openapi.yaml", handleGetOpenAPI(version))
 	mux.Handle("/debug/", handleGetDebug())
 
-	mux.HandleFunc("POST /api/users", api.HandlePostUsers(db, jwtSecret))
-	mux.HandleFunc("POST /api/users/login", api.HandlePostUsersLogin(db, jwtSecret))
+	mux.HandleFunc("POST /api/users", handlePostUsers(db, jwtSecret))
+	mux.HandleFunc("POST /api/users/login", handlePostUsersLogin(db, jwtSecret))
 
 	handler := cors(mux)
 	handler = accesslog(handler, log)
