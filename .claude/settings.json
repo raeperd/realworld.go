@@ -3,13 +3,13 @@
   "hooks": {
     "tool-complete": {
       "Write": {
-        "command": "cd ${workspaceRoot} && golangci-lint run --fix ${file}",
-        "description": "Run golangci-lint with auto-fix after writing Go files",
+        "command": "cd ${workspaceRoot} && golangci-lint run --fix ${file} && make lint && make build && make test",
+        "description": "Run golangci-lint fix, then make lint/build/test after writing Go files",
         "when": "${file} endsWith '.go'"
       },
       "Edit": {
-        "command": "cd ${workspaceRoot} && golangci-lint run --fix ${file}",
-        "description": "Run golangci-lint with auto-fix after editing Go files",
+        "command": "cd ${workspaceRoot} && golangci-lint run --fix ${file} && make lint && make build && make test",
+        "description": "Run golangci-lint fix, then make lint/build/test after editing Go files",
         "when": "${file} endsWith '.go'"
       }
     }
