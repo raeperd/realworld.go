@@ -4,17 +4,14 @@ VERSION := local
 
 default: clean build lint test 
 
-download:
-	go mod download
-
-build: download
-	go build -o $(TARGET_EXEC) -ldflags '-w -X main.Version=$(VERSION)' . 
+build:
+	go build -mod=vendor -o $(TARGET_EXEC) -ldflags '-w -X main.Version=$(VERSION)' .
 
 test:
-	go test -shuffle=on -race -coverprofile=coverage.txt ./...
+	go test -mod=vendor -shuffle=on -race -coverprofile=coverage.txt ./...
 
-lint: download
-	golangci-lint run
+lint:
+	golangci-lint run --build-tags vendor
 	go run golang.org/x/tools/gopls/internal/analysis/modernize/cmd/modernize@latest -test ./...
 	go run golang.org/x/tools/cmd/deadcode@latest -test ./...
 

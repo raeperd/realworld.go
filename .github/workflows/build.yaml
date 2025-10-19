@@ -4,6 +4,7 @@ on:
       - '**/*.go'
       - 'go.mod'
       - 'go.sum'
+      - 'vendor/**'
       - 'Makefile'
       - 'Dockerfile'
       - '.github/workflows/build.yaml'
@@ -19,11 +20,11 @@ jobs:
       - uses: sqlc-dev/setup-sqlc@v4
         with:
           sqlc-version: '1.30.0'
-      - name: check go mod
+      - name: check go mod and vendor
         run: |
-          go mod download
           go mod tidy
-          git diff --exit-code go.mod go.sum
+          go mod vendor
+          git diff --exit-code go.mod go.sum vendor/
           sqlc diff
       - run: make build VERSION=${{ github.ref_name }}
       - run: make test
