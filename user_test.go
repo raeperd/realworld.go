@@ -279,3 +279,78 @@ func httpPostUsersLogin(t *testing.T, email, password string) *http.Response {
 
 	return res
 }
+
+func TestGetUser_Success(t *testing.T) {
+	t.Parallel()
+
+	// Setup: Create user via registration
+	unique := fmt.Sprintf("%d", time.Now().UnixNano())
+	email := fmt.Sprintf("getuser_test_%s@example.com", unique)
+	password := "testpass123"
+	username := "getuser_user_" + unique
+
+	regReq := UserPostRequestBody{
+		Username: username,
+		Email:    email,
+		Password: password,
+	}
+	regRes := httpPostUsers(t, regReq)
+	test.Equal(t, http.StatusCreated, regRes.StatusCode)
+	t.Cleanup(func() { _ = regRes.Body.Close() })
+
+	// Get token from registration response
+	var regResponse UserResponseBody
+	test.Nil(t, json.NewDecoder(regRes.Body).Decode(&regResponse))
+	token := regResponse.Token
+
+	// Test: GET /api/user with valid token
+	getUserRes := httpGetUser(t, token)
+	test.Equal(t, http.StatusOK, getUserRes.StatusCode)
+	t.Cleanup(func() { _ = getUserRes.Body.Close() })
+
+	// Verify response contains correct user data
+	var getUserResponse UserResponseBody
+	test.Nil(t, json.NewDecoder(getUserRes.Body).Decode(&getUserResponse))
+	test.Equal(t, email, getUserResponse.Email)
+	test.Equal(t, username, getUserResponse.Username)
+	test.Equal(t, token, getUserResponse.Token)
+	test.Equal(t, "", getUserResponse.Bio)
+	test.Equal(t, "", getUserResponse.Image)
+}
+
+func httpGetUser(t *testing.T, token string) *http.Response {
+	t.Helper()
+
+	req, err := http.NewRequest("GET", endpoint+"/api/user", nil)
+	test.Nil(t, err)
+
+	req.Header.Set("Authorization", "Token "+token)
+
+	res, err := http.DefaultClient.Do(req)
+	test.Nil(t, err)
+
+	return res
+}
+
+func TestGetUser_InvalidToken(t *testing.T) {
+	t.Parallel()
+
+	// Test with malformed/invalid JWT token
+	invalidToken := "invalid.jwt.token"
+	res := httpGetUser(t, invalidToken)
+	test.Equal(t, http.StatusUnauthorized, res.StatusCode)
+	t.Cleanup(func() { _ = res.Body.Close() })
+}
+
+func TestGetUser_MissingToken(t *testing.T) {
+	t.Parallel()
+
+	// Test without Authorization header
+	req, err := http.NewRequest("GET", endpoint+"/api/user", nil)
+	test.Nil(t, err)
+
+	res, err := http.DefaultClient.Do(req)
+	test.Nil(t, err)
+	test.Equal(t, http.StatusUnauthorized, res.StatusCode)
+	t.Cleanup(func() { _ = res.Body.Close() })
+}

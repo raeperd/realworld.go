@@ -13,6 +13,11 @@ import (
 	"github.com/raeperd/realworld.go/internal/sqlite"
 )
 
+// contextKey is a type for context keys to avoid collisions
+type contextKey string
+
+const userIDKey contextKey = "userID"
+
 func handlePostUsers(db *sql.DB, jwtSecret string) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var request userPostRequestBody
@@ -220,4 +225,53 @@ func (u userLoginRequestBody) Validate() []error {
 		errs = append(errs, errors.New("password is required"))
 	}
 	return errs
+}
+
+func handleGetUser(db *sql.DB, jwtSecret string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// Extract user ID from context (set by authenticate middleware)
+		userID, ok := r.Context().Value(userIDKey).(int64)
+		if !ok {
+			encodeErrorResponse(r.Context(), http.StatusUnauthorized, []error{errors.New("unauthorized")}, w)
+			return
+		}
+
+		tx, err := db.BeginTx(r.Context(), nil)
+		if err != nil {
+			encodeErrorResponse(r.Context(), http.StatusInternalServerError, []error{err}, w)
+			return
+		}
+		defer func() { _ = tx.Rollback() }()
+
+		queries := sqlite.New(tx)
+		user, err := queries.GetUserByID(r.Context(), userID)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				encodeErrorResponse(r.Context(), http.StatusUnauthorized, []error{errors.New("user not found")}, w)
+				return
+			}
+			encodeErrorResponse(r.Context(), http.StatusInternalServerError, []error{err}, w)
+			return
+		}
+
+		// Generate fresh JWT token for response
+		token, err := auth.GenerateToken(user.ID, user.Username, jwtSecret)
+		if err != nil {
+			encodeErrorResponse(r.Context(), http.StatusInternalServerError, []error{err}, w)
+			return
+		}
+
+		if err := tx.Commit(); err != nil {
+			encodeErrorResponse(r.Context(), http.StatusInternalServerError, []error{err}, w)
+			return
+		}
+
+		encodeResponse(r.Context(), http.StatusOK, userPostResponseBody{
+			Email:    user.Email,
+			Token:    token,
+			Username: user.Username,
+			Bio:      user.Bio.String,
+			Image:    user.Image.String,
+		}, w)
+	}
 }
