@@ -3,14 +3,9 @@ ARG VERSION=local
 
 WORKDIR /src
 
-COPY ./go.mod ./go.sum ./
-COPY ./Makefile .
-
-RUN make download
-
 COPY . .
 
-RUN make build TARGET_EXEC=app CGO_ENABLED=0 VERSION=${VERSION}
+RUN make build TARGET_EXEC=app VERSION=${VERSION}
 
 FROM scratch
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/

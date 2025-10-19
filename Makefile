@@ -4,16 +4,13 @@ VERSION := local
 
 default: clean build lint test 
 
-download:
-	go mod download
-
-build: download
-	go build -o $(TARGET_EXEC) -ldflags '-w -X main.Version=$(VERSION)' . 
+build:
+	CGO_ENABLED=0 go build -o $(TARGET_EXEC) -ldflags '-w -X main.Version=$(VERSION)' .
 
 test:
 	go test -shuffle=on -race -coverprofile=coverage.txt ./...
 
-lint: download
+lint:
 	golangci-lint run
 	go run golang.org/x/tools/gopls/internal/analysis/modernize/cmd/modernize@latest -test ./...
 	go run golang.org/x/tools/cmd/deadcode@latest -test ./...
