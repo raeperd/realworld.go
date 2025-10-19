@@ -18,10 +18,13 @@ import (
 	"os/signal"
 	"runtime"
 	"runtime/debug"
+	"strings"
 	"syscall"
 	"time"
 
 	_ "modernc.org/sqlite"
+
+	"github.com/raeperd/realworld.go/internal/auth"
 )
 
 func main() {
@@ -168,6 +171,7 @@ func route(log *slog.Logger, version string, db *sql.DB, jwtSecret string) http.
 
 	mux.HandleFunc("POST /api/users", handlePostUsers(db, jwtSecret))
 	mux.HandleFunc("POST /api/users/login", handlePostUsersLogin(db, jwtSecret))
+	mux.Handle("GET /api/user", authenticate(handleGetUser(db, jwtSecret), jwtSecret))
 
 	handler := cors(mux)
 	handler = accesslog(handler, log)
@@ -322,6 +326,38 @@ func cors(next http.Handler) http.Handler {
 		}
 
 		next.ServeHTTP(w, r)
+	})
+}
+
+// authenticate is a middleware that validates JWT tokens and attaches user ID to the request context.
+// It expects the token in the "Authorization: Token <jwt>" header format.
+// Returns 401 Unauthorized if the token is missing or invalid.
+func authenticate(next http.Handler, jwtSecret string) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		authHeader := r.Header.Get("Authorization")
+		if authHeader == "" {
+			encodeErrorResponse(r.Context(), http.StatusUnauthorized, []error{errors.New("missing authorization header")}, w)
+			return
+		}
+
+		// Extract token from "Token <jwt>" format
+		tokenString := strings.TrimPrefix(authHeader, "Token ")
+		if tokenString == authHeader {
+			// "Token " prefix not found
+			encodeErrorResponse(r.Context(), http.StatusUnauthorized, []error{errors.New("invalid authorization header format")}, w)
+			return
+		}
+
+		// Parse and validate token
+		claims, err := auth.ParseToken(tokenString, jwtSecret)
+		if err != nil {
+			encodeErrorResponse(r.Context(), http.StatusUnauthorized, []error{errors.New("invalid or expired token")}, w)
+			return
+		}
+
+		// Store user ID in context
+		ctx := context.WithValue(r.Context(), userIDKey, claims.UserID)
+		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
 
