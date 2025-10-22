@@ -97,6 +97,17 @@ Detailed checklist following this pattern (TEST FIRST):
 - Run linter: `make lint`
 - Manual test with curl or HTTP client
 - Update this plan's status to "Completed"
+
+### Phase 7: Create Pull Request
+- Push branch to remote: `git push -u origin <branch-name>`
+- Create PR with `gh pr create` including:
+  - Concise title: "feat: implement {METHOD} {PATH}"
+  - Summary section with endpoint description
+  - Changes section listing endpoint, database, handler, tests
+  - Test plan section showing coverage and test results
+  - Implementation details mentioning TDD workflow
+- Update plan document with PR link
+- Commit and push plan update
 ```
 
 **Verification Commands:**
@@ -257,16 +268,18 @@ After creating the plan:
 4. Make commits at appropriate points (test, implementation, refactor)
 5. Report progress and any issues encountered
 
-### 10. Final Verification
+### 10. Final Verification and Pull Request
 
 Before considering the task complete:
 
-- [ ] All tests pass (`make test`)
-- [ ] No linter warnings (`make lint`)
-- [ ] Implementation matches API spec exactly
-- [ ] Manual testing confirms correct behavior
-- [ ] Plan document updated to "Completed" status
-- [ ] All commits follow the commit strategy
+- All tests pass (`make test`)
+- No linter warnings (`make lint`)
+- Implementation matches API spec exactly
+- Manual testing confirms correct behavior
+- Plan document updated to "Completed" status
+- All commits follow the commit strategy
+- Pull request created with concise title and description
+- Plan document updated with PR link
 
 ## Example Usage
 
@@ -281,6 +294,8 @@ Expected flow:
 4. Follow TDD cycle: test (RED) → implement (GREEN) → refactor
 5. Make atomic commits at each phase
 6. Verify and mark plan as completed
+7. Create pull request with concise title and description
+8. Update plan with PR link
 
 ## Notes
 
