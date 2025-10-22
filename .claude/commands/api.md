@@ -123,6 +123,7 @@ Detailed checklist following this pattern (TEST FIRST):
   - Implementation details mentioning TDD workflow
 - Update plan document with PR link
 - Commit and push plan update
+- **DO NOT merge the PR** - Let the user review and merge when ready
 ```
 
 **Verification Commands:**
@@ -306,9 +307,12 @@ User: /api
 
 Expected flow:
 1. Read spec and check implemented endpoints
-2. Analyze and select next logical endpoint (e.g., "GET /api/tags - simple, no dependencies")
-3. Present selection with rationale to user
-4. Ask: "Ready to implement GET /api/tags?"
+2. Analyze dependencies and select next logical endpoint
+3. Present selection with clear rationale explaining:
+   - Why this endpoint is chosen
+   - What dependencies are satisfied
+   - Complexity level and implementation effort
+4. Ask: "Ready to implement [SELECTED ENDPOINT]?"
 5. On confirmation, proceed with TDD workflow
 6. Create plan, implement, test, commit, create PR
 
@@ -330,23 +334,25 @@ Expected flow:
 
 ## Endpoint Selection Strategy (Auto-Selection Mode)
 
-When no arguments are provided, select the next endpoint based on:
+When no arguments are provided, analyze and select the next endpoint intelligently:
 
-**Priority Order**:
-1. **Tags endpoint** (`GET /api/tags`) - Simplest, no auth, no dependencies
-2. **Profile endpoints** (`GET /api/profiles/:username`) - Simple read operations
-3. **Article read operations** (`GET /api/articles`, `GET /api/articles/:slug`) - Complex but read-only
-4. **Follow/Unfollow** (`POST/DELETE /api/profiles/:username/follow`) - Requires profiles
-5. **Article mutations** (`POST/PUT/DELETE /api/articles`) - Requires articles read
-6. **Comments** (`GET/POST/DELETE /api/articles/:slug/comments`) - Requires articles
-7. **Favorites** (`POST/DELETE /api/articles/:slug/favorite`) - Requires articles
-8. **Feed** (`GET /api/articles/feed`) - Requires articles and follows
+**Analysis Steps**:
+1. Read `@docs/spec.md` to list all RealWorld API endpoints
+2. Check `@main.go` to identify already implemented endpoints
+3. Check `@internal/sqlite/schema.sql` to see available database tables
+4. Analyze dependencies between endpoints
 
-**Selection Criteria**:
-- Dependencies satisfied (prerequisite endpoints implemented)
-- Complexity (simpler endpoints first)
-- Feature completeness (complete one feature before starting another)
-- Database schema ready (tables exist or can be added)
+**Selection Criteria** (in order of importance):
+1. **Dependencies satisfied** - Prerequisite endpoints/tables must exist
+2. **Complexity** - Prefer simpler endpoints when dependencies are equal
+3. **Feature completeness** - Complete related endpoints together when possible
+4. **Database readiness** - Prefer endpoints using existing schema
+
+**Present Selection**:
+- Show selected endpoint with clear rationale
+- Explain why this endpoint is the logical next step
+- Mention any dependencies that are satisfied
+- Ask user for confirmation before proceeding
 
 ## Notes
 
