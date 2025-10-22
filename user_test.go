@@ -114,7 +114,7 @@ func httpPostUsers(t *testing.T, request UserPostRequestBody) *http.Response {
 	return res
 }
 
-type UserWrapper[T UserPostRequestBody | UserResponseBody] struct {
+type UserWrapper[T UserPostRequestBody | UserPutRequestBody | UserResponseBody] struct {
 	User T `json:"user"`
 }
 
@@ -353,4 +353,171 @@ func TestGetUser_MissingToken(t *testing.T) {
 	test.Nil(t, err)
 	test.Equal(t, http.StatusUnauthorized, res.StatusCode)
 	t.Cleanup(func() { _ = res.Body.Close() })
+}
+
+func TestPutUser_Success(t *testing.T) {
+	t.Parallel()
+
+	// Setup: Create user via registration
+	unique := fmt.Sprintf("%d", time.Now().UnixNano())
+	email := fmt.Sprintf("putuser_test_%s@example.com", unique)
+	password := "testpass123"
+	username := "putuser_user_" + unique
+
+	regReq := UserPostRequestBody{
+		Username: username,
+		Email:    email,
+		Password: password,
+	}
+	regRes := httpPostUsers(t, regReq)
+	test.Equal(t, http.StatusCreated, regRes.StatusCode)
+	t.Cleanup(func() { _ = regRes.Body.Close() })
+
+	// Get token from registration response
+	var regResponse UserResponseBody
+	test.Nil(t, json.NewDecoder(regRes.Body).Decode(&regResponse))
+	token := regResponse.Token
+
+	// Test: Update user profile with bio and image
+	updateReq := UserPutRequestBody{
+		Email: email,
+		Bio:   "I like to skateboard",
+		Image: "https://i.stack.imgur.com/xHWG8.jpg",
+	}
+	putRes := httpPutUser(t, token, &updateReq)
+	test.Equal(t, http.StatusOK, putRes.StatusCode)
+	t.Cleanup(func() { _ = putRes.Body.Close() })
+
+	// Verify response contains updated user data
+	var putResponse UserResponseBody
+	test.Nil(t, json.NewDecoder(putRes.Body).Decode(&putResponse))
+	test.Equal(t, email, putResponse.Email)
+	test.Equal(t, username, putResponse.Username)
+	test.Equal(t, "I like to skateboard", putResponse.Bio)
+	test.Equal(t, "https://i.stack.imgur.com/xHWG8.jpg", putResponse.Image)
+	test.NotEqual(t, "", putResponse.Token)
+}
+
+func httpPutUser(t *testing.T, token string, updateReq *UserPutRequestBody) *http.Response {
+	t.Helper()
+
+	body, err := json.Marshal(UserWrapper[UserPutRequestBody]{User: *updateReq})
+	test.Nil(t, err)
+
+	req, err := http.NewRequest(http.MethodPut, endpoint+"/api/user", bytes.NewBuffer(body))
+	test.Nil(t, err)
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Token "+token)
+
+	res, err := http.DefaultClient.Do(req)
+	test.Nil(t, err)
+
+	return res
+}
+
+type UserPutRequestBody struct {
+	Email    string `json:"email,omitempty"`
+	Username string `json:"username,omitempty"`
+	Password string `json:"password,omitempty"`
+	Bio      string `json:"bio,omitempty"`
+	Image    string `json:"image,omitempty"`
+}
+
+func TestPutUser_Unauthorized(t *testing.T) {
+	t.Parallel()
+
+	// Test without token
+	updateReq := UserPutRequestBody{
+		Bio: "I like to skateboard",
+	}
+	body, err := json.Marshal(UserWrapper[UserPutRequestBody]{User: updateReq})
+	test.Nil(t, err)
+
+	req, err := http.NewRequest(http.MethodPut, endpoint+"/api/user", bytes.NewBuffer(body))
+	test.Nil(t, err)
+	req.Header.Set("Content-Type", "application/json")
+
+	res, err := http.DefaultClient.Do(req)
+	test.Nil(t, err)
+	test.Equal(t, http.StatusUnauthorized, res.StatusCode)
+	t.Cleanup(func() { _ = res.Body.Close() })
+}
+
+func TestPutUser_PartialUpdate(t *testing.T) {
+	t.Parallel()
+
+	// Setup: Create user via registration
+	unique := fmt.Sprintf("%d", time.Now().UnixNano())
+	email := fmt.Sprintf("partial_test_%s@example.com", unique)
+	password := "testpass123"
+	username := "partial_user_" + unique
+
+	regReq := UserPostRequestBody{
+		Username: username,
+		Email:    email,
+		Password: password,
+	}
+	regRes := httpPostUsers(t, regReq)
+	test.Equal(t, http.StatusCreated, regRes.StatusCode)
+	t.Cleanup(func() { _ = regRes.Body.Close() })
+
+	// Get token from registration response
+	var regResponse UserResponseBody
+	test.Nil(t, json.NewDecoder(regRes.Body).Decode(&regResponse))
+	token := regResponse.Token
+
+	// Test: Update only bio (partial update)
+	updateReq := UserPutRequestBody{
+		Bio: "Only updating bio field",
+	}
+	putRes := httpPutUser(t, token, &updateReq)
+	test.Equal(t, http.StatusOK, putRes.StatusCode)
+	t.Cleanup(func() { _ = putRes.Body.Close() })
+
+	// Verify response - email and username should remain unchanged
+	var putResponse UserResponseBody
+	test.Nil(t, json.NewDecoder(putRes.Body).Decode(&putResponse))
+	test.Equal(t, email, putResponse.Email)
+	test.Equal(t, username, putResponse.Username)
+	test.Equal(t, "Only updating bio field", putResponse.Bio)
+	test.Equal(t, "", putResponse.Image) // Should remain empty
+}
+
+func TestPutUser_EmptyBody(t *testing.T) {
+	t.Parallel()
+
+	// Setup: Create user via registration
+	unique := fmt.Sprintf("%d", time.Now().UnixNano())
+	email := fmt.Sprintf("empty_test_%s@example.com", unique)
+	password := "testpass123"
+	username := "empty_user_" + unique
+
+	regReq := UserPostRequestBody{
+		Username: username,
+		Email:    email,
+		Password: password,
+	}
+	regRes := httpPostUsers(t, regReq)
+	test.Equal(t, http.StatusCreated, regRes.StatusCode)
+	t.Cleanup(func() { _ = regRes.Body.Close() })
+
+	// Get token from registration response
+	var regResponse UserResponseBody
+	test.Nil(t, json.NewDecoder(regRes.Body).Decode(&regResponse))
+	token := regResponse.Token
+
+	// Test: Update with empty body (no changes)
+	updateReq := UserPutRequestBody{}
+	putRes := httpPutUser(t, token, &updateReq)
+	test.Equal(t, http.StatusOK, putRes.StatusCode)
+	t.Cleanup(func() { _ = putRes.Body.Close() })
+
+	// Verify response - all fields should remain unchanged
+	var putResponse UserResponseBody
+	test.Nil(t, json.NewDecoder(putRes.Body).Decode(&putResponse))
+	test.Equal(t, email, putResponse.Email)
+	test.Equal(t, username, putResponse.Username)
+	test.Equal(t, "", putResponse.Bio)
+	test.Equal(t, "", putResponse.Image)
 }
