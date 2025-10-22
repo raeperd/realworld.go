@@ -1,26 +1,41 @@
 ---
 description: Implement RealWorld API endpoint with TDD approach
-argument-hint: METHOD PATH
+argument-hint: METHOD PATH (optional - auto-selects next endpoint if empty)
 ---
 
 # API Implementation Command
 
-Implement the RealWorld API endpoint **$1 $2** following Test-Driven Development methodology.
+## Auto-Selection Mode
 
-## Parameters
+**Arguments provided**: $ARGUMENTS
 
-- **$1**: HTTP method (GET, POST, PUT, DELETE)
-- **$2**: API path (e.g., /api/user, /api/articles/:slug)
+**Instructions**:
 
-## Instructions
+If no arguments are provided (empty $ARGUMENTS):
+1. **Read the API specification** from `@docs/spec.md` to see all endpoints
+2. **Check main.go** to see which endpoints are already implemented
+3. **Analyze and select** the next logical endpoint to implement based on:
+   - Dependencies (implement prerequisite endpoints first)
+   - Complexity (start with simpler endpoints)
+   - Feature grouping (complete related endpoints together)
+4. **Present the selection** to user with rationale
+5. **Ask for confirmation** before proceeding
+6. **Proceed with implementation** using the workflow below
 
-You are implementing the endpoint **$1 $2** using Test-Driven Development (TDD) following Kent Beck's principles.
+If arguments are provided ($1 and $2):
+- Implement the specified endpoint **$1 $2** directly
+
+---
+
+## Implementation Workflow
+
+You are implementing an endpoint using Test-Driven Development (TDD) following Kent Beck's principles.
 
 ### 1. Preparation Phase
 
-Before starting implementation of **$1 $2**:
+Before starting implementation:
 
-1. **Read the API specification** from `@docs/spec.md` for the **$1 $2** endpoint
+1. **Read the API specification** from `@docs/spec.md` for the target endpoint
 2. **Check existing implementation plans** in `docs/prompts/` for similar endpoints
 3. **Identify the database schema** requirements from `@internal/sqlite/schema.sql`
 4. **Review existing code patterns** from similar handlers in the codebase
@@ -283,6 +298,22 @@ Before considering the task complete:
 
 ## Example Usage
 
+### Mode 1: Auto-Selection (No Arguments)
+
+```
+User: /api
+```
+
+Expected flow:
+1. Read spec and check implemented endpoints
+2. Analyze and select next logical endpoint (e.g., "GET /api/tags - simple, no dependencies")
+3. Present selection with rationale to user
+4. Ask: "Ready to implement GET /api/tags?"
+5. On confirmation, proceed with TDD workflow
+6. Create plan, implement, test, commit, create PR
+
+### Mode 2: Manual Selection (With Arguments)
+
 ```
 User: /api POST /api/articles
 ```
@@ -296,6 +327,26 @@ Expected flow:
 6. Verify and mark plan as completed
 7. Create pull request with concise title and description
 8. Update plan with PR link
+
+## Endpoint Selection Strategy (Auto-Selection Mode)
+
+When no arguments are provided, select the next endpoint based on:
+
+**Priority Order**:
+1. **Tags endpoint** (`GET /api/tags`) - Simplest, no auth, no dependencies
+2. **Profile endpoints** (`GET /api/profiles/:username`) - Simple read operations
+3. **Article read operations** (`GET /api/articles`, `GET /api/articles/:slug`) - Complex but read-only
+4. **Follow/Unfollow** (`POST/DELETE /api/profiles/:username/follow`) - Requires profiles
+5. **Article mutations** (`POST/PUT/DELETE /api/articles`) - Requires articles read
+6. **Comments** (`GET/POST/DELETE /api/articles/:slug/comments`) - Requires articles
+7. **Favorites** (`POST/DELETE /api/articles/:slug/favorite`) - Requires articles
+8. **Feed** (`GET /api/articles/feed`) - Requires articles and follows
+
+**Selection Criteria**:
+- Dependencies satisfied (prerequisite endpoints implemented)
+- Complexity (simpler endpoints first)
+- Feature completeness (complete one feature before starting another)
+- Database schema ready (tables exist or can be added)
 
 ## Notes
 
