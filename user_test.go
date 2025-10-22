@@ -384,7 +384,7 @@ func TestPutUser_Success(t *testing.T) {
 		Bio:   "I like to skateboard",
 		Image: "https://i.stack.imgur.com/xHWG8.jpg",
 	}
-	putRes := httpPutUser(t, token, updateReq)
+	putRes := httpPutUser(t, token, &updateReq)
 	test.Equal(t, http.StatusOK, putRes.StatusCode)
 	t.Cleanup(func() { _ = putRes.Body.Close() })
 
@@ -398,10 +398,10 @@ func TestPutUser_Success(t *testing.T) {
 	test.NotEqual(t, "", putResponse.Token)
 }
 
-func httpPutUser(t *testing.T, token string, updateReq UserPutRequestBody) *http.Response {
+func httpPutUser(t *testing.T, token string, updateReq *UserPutRequestBody) *http.Response {
 	t.Helper()
 
-	body, err := json.Marshal(UserWrapper[UserPutRequestBody]{User: updateReq})
+	body, err := json.Marshal(UserWrapper[UserPutRequestBody]{User: *updateReq})
 	test.Nil(t, err)
 
 	req, err := http.NewRequest(http.MethodPut, endpoint+"/api/user", bytes.NewBuffer(body))
@@ -471,7 +471,7 @@ func TestPutUser_PartialUpdate(t *testing.T) {
 	updateReq := UserPutRequestBody{
 		Bio: "Only updating bio field",
 	}
-	putRes := httpPutUser(t, token, updateReq)
+	putRes := httpPutUser(t, token, &updateReq)
 	test.Equal(t, http.StatusOK, putRes.StatusCode)
 	t.Cleanup(func() { _ = putRes.Body.Close() })
 
@@ -509,7 +509,7 @@ func TestPutUser_EmptyBody(t *testing.T) {
 
 	// Test: Update with empty body (no changes)
 	updateReq := UserPutRequestBody{}
-	putRes := httpPutUser(t, token, updateReq)
+	putRes := httpPutUser(t, token, &updateReq)
 	test.Equal(t, http.StatusOK, putRes.StatusCode)
 	t.Cleanup(func() { _ = putRes.Body.Close() })
 
