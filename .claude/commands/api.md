@@ -40,7 +40,7 @@ Before starting implementation:
 3. **Identify the database schema** requirements from `@internal/sqlite/schema.sql`
 4. **Review existing code patterns** from similar handlers in the codebase
 
-### 2. Create Implementation Plan
+### 2. Create Implementation Plan and Draft PR
 
 Create a detailed implementation plan document at:
 `docs/prompts/YYYY-MM-DD-{method}-{path-simplified}.md`
@@ -50,8 +50,17 @@ The plan MUST include:
 **Status & Links:**
 ```
 Status: [ ] Not Started / [ ] In Progress / [x] Completed
-PR: #[number] (when created)
+PR: (to be added after PR creation)
 ```
+
+**After creating the plan:**
+1. Commit the plan document: "docs: add implementation plan for {METHOD} {PATH}"
+2. Push to create branch and trigger first commit
+3. Create draft PR with `gh pr create --draft`
+4. Update plan with PR link
+5. Commit and push: "docs: add PR link to plan"
+
+This makes the plan document the natural first commit that creates the PR.
 
 **Context:**
 - Original request and endpoint details
@@ -71,16 +80,18 @@ PR: #[number] (when created)
 Detailed checklist following this pattern (TEST FIRST):
 
 ```markdown
-### Phase 0: Create Draft PR Early
+### Phase 0: Create Plan and Draft PR
 - Create feature branch: `git checkout -b {branch-name}`
-- Push empty branch: `git push -u origin {branch-name}`
+- Create implementation plan document at `docs/prompts/YYYY-MM-DD-{feature}.md`
+- Commit plan: "docs: add implementation plan for {METHOD} {PATH}"
+- Push branch: `git push -u origin {branch-name}`
 - Create DRAFT PR with `gh pr create --draft` including:
   - Title: "feat: implement {METHOD} {PATH}"
-  - Body with placeholder sections (to be updated later)
+  - Body referencing the plan document
   - Mark as draft to indicate work in progress
-- This allows CI to run on each TDD commit
+- This first commit with plan naturally creates the PR
 - Update plan document with PR link
-- Commit and push plan update
+- Commit and push: "docs: add PR link to plan"
 
 ### Phase 1: Test First (RED)
 - Create test file or add to existing test file
@@ -320,12 +331,14 @@ Expected flow:
    - Complexity level and implementation effort
 4. Ask: "Ready to implement [SELECTED ENDPOINT]?"
 5. On confirmation, proceed with TDD workflow:
-   - Create branch and draft PR (Phase 0)
-   - Write failing test and push → CI shows RED (Phase 1)
-   - Implement code and push → CI shows GREEN (Phase 3)
-   - Add edge cases and push → CI validates (Phase 4)
-   - Refactor if needed and push → CI validates (Phase 5)
-   - Mark PR ready for review (Phase 6)
+   - Create branch and plan document → commit → push
+   - Create draft PR (plan commit is first in PR)
+   - Update plan with PR link → commit → push
+   - Write failing test → commit → push → CI shows RED
+   - Implement code → commit → push → CI shows GREEN
+   - Add edge cases → commit → push → CI validates
+   - Refactor if needed → commit → push → CI validates
+   - Mark PR ready for review with `gh pr ready`
 
 ### Mode 2: Manual Selection (With Arguments)
 
@@ -337,13 +350,15 @@ Expected flow:
 1. Read spec for POST /api/articles
 2. Create plan at docs/prompts/2025-10-23-post-api-articles.md
 3. Ask user for confirmation to proceed
-4. Create branch and draft PR early
-5. Follow TDD cycle with CI visibility:
-   - Write failing test → push → CI RED
-   - Implement code → push → CI GREEN
-   - Add edge cases → push → CI validates
-   - Refactor if needed → push → CI validates
-6. Mark PR ready for review (not merged automatically)
+4. Create branch and commit plan → push (first commit)
+5. Create draft PR (plan document naturally creates PR)
+6. Update plan with PR link → commit → push
+7. Follow TDD cycle with CI visibility:
+   - Write failing test → commit → push → CI RED
+   - Implement code → commit → push → CI GREEN
+   - Add edge cases → commit → push → CI validates
+   - Refactor if needed → commit → push → CI validates
+8. Mark PR ready for review with `gh pr ready` (not merged automatically)
 
 ## Endpoint Selection Strategy (Auto-Selection Mode)
 
@@ -367,13 +382,16 @@ When no arguments are provided, analyze and select the next endpoint intelligent
 - Mention any dependencies that are satisfied
 - Ask user for confirmation before proceeding
 
-## Benefits of Draft PR Early Approach
+## Benefits of Plan-First Draft PR Approach
 
+- **Natural First Commit**: Plan document is the logical first commit that creates the PR
+- **Clear Documentation**: PR starts with implementation plan, providing context
 - **CI Visibility**: Each TDD phase (RED → GREEN) is visible in PR commit history with CI status
 - **Early Feedback**: Catch build/lint issues immediately on each commit
-- **Progress Tracking**: PR shows implementation progress in real-time
+- **Progress Tracking**: PR shows implementation progress in real-time from plan to completion
 - **Draft Status**: Clearly indicates work in progress, preventing premature review
 - **Atomic Commits**: Each commit has clear purpose with CI validation
+- **Complete History**: PR contains full story: plan → RED → GREEN → refactor → done
 
 ## Notes
 
