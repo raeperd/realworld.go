@@ -71,11 +71,23 @@ PR: #[number] (when created)
 Detailed checklist following this pattern (TEST FIRST):
 
 ```markdown
+### Phase 0: Create Draft PR Early
+- Create feature branch: `git checkout -b {branch-name}`
+- Push empty branch: `git push -u origin {branch-name}`
+- Create DRAFT PR with `gh pr create --draft` including:
+  - Title: "feat: implement {METHOD} {PATH}"
+  - Body with placeholder sections (to be updated later)
+  - Mark as draft to indicate work in progress
+- This allows CI to run on each TDD commit
+- Update plan document with PR link
+- Commit and push plan update
+
 ### Phase 1: Test First (RED)
 - Create test file or add to existing test file
 - Write failing integration test for happy path
 - Run test to confirm it fails: `go test -v -run TestName`
 - Commit: "test: add failing test for {endpoint}"
+- Push to trigger CI (should show RED/failing status)
 
 ### Phase 2: Database Layer (if needed)
 - Add SQL queries to `internal/sqlite/query.sql`
@@ -90,6 +102,7 @@ Detailed checklist following this pattern (TEST FIRST):
 - Run test to confirm it passes: `go test -v -run TestName`
 - Run all tests: `make test`
 - Commit: "feat: implement {endpoint}"
+- Push to trigger CI (should show GREEN/passing status)
 
 ### Phase 4: Edge Cases & Validation (RED → GREEN)
 - Add test for validation error (missing fields)
@@ -100,29 +113,22 @@ Detailed checklist following this pattern (TEST FIRST):
 - Implement not found handling to make test pass
 - Run all tests: `make test`
 - Commit: "test: add edge case tests for {endpoint}"
+- Push to trigger CI
 
 ### Phase 5: Refactor (if needed)
 - Review code for duplication
 - Extract common patterns if found in 3+ places
 - Ensure all tests still pass after each refactoring
 - Commit: "refactor: {description}" (if changes made)
+- Push to trigger CI
 
-### Phase 6: Verification
+### Phase 6: Verification & Finalize PR
 - Run full test suite: `make test`
 - Run linter: `make lint`
 - Manual test with curl or HTTP client
 - Update this plan's status to "Completed"
-
-### Phase 7: Create Pull Request
-- Push branch to remote: `git push -u origin <branch-name>`
-- Create PR with `gh pr create` including:
-  - Concise title: "feat: implement {METHOD} {PATH}"
-  - Summary section with endpoint description
-  - Changes section listing endpoint, database, handler, tests
-  - Test plan section showing coverage and test results
-  - Implementation details mentioning TDD workflow
-- Update plan document with PR link
-- Commit and push plan update
+- Update PR description with final details
+- Mark PR as ready for review: `gh pr ready`
 - **DO NOT merge the PR** - Let the user review and merge when ready
 ```
 
@@ -313,8 +319,13 @@ Expected flow:
    - What dependencies are satisfied
    - Complexity level and implementation effort
 4. Ask: "Ready to implement [SELECTED ENDPOINT]?"
-5. On confirmation, proceed with TDD workflow
-6. Create plan, implement, test, commit, create PR
+5. On confirmation, proceed with TDD workflow:
+   - Create branch and draft PR (Phase 0)
+   - Write failing test and push → CI shows RED (Phase 1)
+   - Implement code and push → CI shows GREEN (Phase 3)
+   - Add edge cases and push → CI validates (Phase 4)
+   - Refactor if needed and push → CI validates (Phase 5)
+   - Mark PR ready for review (Phase 6)
 
 ### Mode 2: Manual Selection (With Arguments)
 
@@ -326,11 +337,13 @@ Expected flow:
 1. Read spec for POST /api/articles
 2. Create plan at docs/prompts/2025-10-23-post-api-articles.md
 3. Ask user for confirmation to proceed
-4. Follow TDD cycle: test (RED) → implement (GREEN) → refactor
-5. Make atomic commits at each phase
-6. Verify and mark plan as completed
-7. Create pull request with concise title and description
-8. Update plan with PR link
+4. Create branch and draft PR early
+5. Follow TDD cycle with CI visibility:
+   - Write failing test → push → CI RED
+   - Implement code → push → CI GREEN
+   - Add edge cases → push → CI validates
+   - Refactor if needed → push → CI validates
+6. Mark PR ready for review (not merged automatically)
 
 ## Endpoint Selection Strategy (Auto-Selection Mode)
 
@@ -354,6 +367,14 @@ When no arguments are provided, analyze and select the next endpoint intelligent
 - Mention any dependencies that are satisfied
 - Ask user for confirmation before proceeding
 
+## Benefits of Draft PR Early Approach
+
+- **CI Visibility**: Each TDD phase (RED → GREEN) is visible in PR commit history with CI status
+- **Early Feedback**: Catch build/lint issues immediately on each commit
+- **Progress Tracking**: PR shows implementation progress in real-time
+- **Draft Status**: Clearly indicates work in progress, preventing premature review
+- **Atomic Commits**: Each commit has clear purpose with CI validation
+
 ## Notes
 
 - Always reference `@docs/prompts/TDD.md` instead of repeating TDD methodology
@@ -362,3 +383,4 @@ When no arguments are provided, analyze and select the next endpoint intelligent
 - Never skip the failing test verification step
 - Prefer integration tests over unit tests
 - Use real database, not mocks
+- Push after each significant commit to trigger CI
