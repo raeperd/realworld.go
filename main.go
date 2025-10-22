@@ -172,6 +172,7 @@ func route(log *slog.Logger, version string, db *sql.DB, jwtSecret string) http.
 	mux.HandleFunc("POST /api/users", handlePostUsers(db, jwtSecret))
 	mux.HandleFunc("POST /api/users/login", handlePostUsersLogin(db, jwtSecret))
 	mux.Handle("GET /api/user", authenticate(handleGetUser(db, jwtSecret), jwtSecret))
+	mux.Handle("PUT /api/user", authenticate(handlePutUser(db, jwtSecret), jwtSecret))
 
 	handler := cors(mux)
 	handler = accesslog(handler, log)

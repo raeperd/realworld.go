@@ -275,3 +275,72 @@ func handleGetUser(db *sql.DB, jwtSecret string) http.HandlerFunc {
 		}, w)
 	}
 }
+
+func handlePutUser(db *sql.DB, jwtSecret string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// Extract user ID from context (set by authenticate middleware)
+		userID, ok := r.Context().Value(userIDKey).(int64)
+		if !ok {
+			encodeErrorResponse(r.Context(), http.StatusUnauthorized, []error{errors.New("unauthorized")}, w)
+			return
+		}
+
+		var request userPutRequestBody
+		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		defer func() { _ = r.Body.Close() }()
+
+		tx, err := db.BeginTx(r.Context(), nil)
+		if err != nil {
+			encodeErrorResponse(r.Context(), http.StatusInternalServerError, []error{err}, w)
+			return
+		}
+		defer func() { _ = tx.Rollback() }()
+
+		queries := sqlite.New(tx)
+		user, err := queries.UpdateUser(r.Context(), sqlite.UpdateUserParams{
+			ID:       userID,
+			Email:    sql.NullString{String: request.User.Email, Valid: request.User.Email != ""},
+			Username: sql.NullString{String: request.User.Username, Valid: request.User.Username != ""},
+			Password: sql.NullString{String: request.User.Password, Valid: request.User.Password != ""},
+			Bio:      sql.NullString{String: request.User.Bio, Valid: request.User.Bio != ""},
+			Image:    sql.NullString{String: request.User.Image, Valid: request.User.Image != ""},
+		})
+		if err != nil {
+			encodeErrorResponse(r.Context(), http.StatusInternalServerError, []error{err}, w)
+			return
+		}
+
+		// Generate fresh JWT token for response
+		token, err := auth.GenerateToken(user.ID, user.Username, jwtSecret)
+		if err != nil {
+			encodeErrorResponse(r.Context(), http.StatusInternalServerError, []error{err}, w)
+			return
+		}
+
+		if err := tx.Commit(); err != nil {
+			encodeErrorResponse(r.Context(), http.StatusInternalServerError, []error{err}, w)
+			return
+		}
+
+		encodeResponse(r.Context(), http.StatusOK, userPostResponseBody{
+			Email:    user.Email,
+			Token:    token,
+			Username: user.Username,
+			Bio:      user.Bio.String,
+			Image:    user.Image.String,
+		}, w)
+	}
+}
+
+type userPutRequestBody struct {
+	User struct {
+		Email    string `json:"email,omitempty"`
+		Username string `json:"username,omitempty"`
+		Password string `json:"password,omitempty"`
+		Bio      string `json:"bio,omitempty"`
+		Image    string `json:"image,omitempty"`
+	} `json:"user"`
+}
