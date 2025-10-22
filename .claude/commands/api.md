@@ -42,56 +42,48 @@ Before starting implementation:
 
 ### 2. Create Implementation Plan and Draft PR
 
-Create a detailed implementation plan document at:
+**Use the plan creation workflow from `@.claude/commands/plan.md`:**
+
+Create implementation plan for the endpoint with:
+- **Title**: "{METHOD} {PATH}"
+- **Description**: Brief summary from API spec
+
+The plan document should be created at:
 `docs/prompts/YYYY-MM-DD-{method}-{path-simplified}.md`
 
-The plan MUST include:
+**Plan Structure** (as defined in plan.md):
+- Status & Links (with PR reference)
+- Context (original request, API spec reference)
+- Methodology (reference to TDD.md)
+- Feature Requirements (request/response, auth, validation, database)
+- Implementation Steps (detailed TDD checklist)
+- Verification Commands
 
-**Status & Links:**
-```
-Status: [ ] Not Started / [ ] In Progress / [x] Completed
-PR: (to be added after PR creation)
-```
+**Follow plan.md workflow**:
+1. Create branch and plan document
+2. Commit: "docs: add implementation plan for {METHOD} {PATH}"
+3. Push to create branch
+4. Create draft PR with `gh pr create --draft`
+5. Update plan with PR link
+6. Commit and push: "docs: add PR link to plan"
 
-**After creating the plan:**
-1. Commit the plan document: "docs: add implementation plan for {METHOD} {PATH}"
-2. Push to create branch and trigger first commit
-3. Create draft PR with `gh pr create --draft`
-4. Update plan with PR link
-5. Commit and push: "docs: add PR link to plan"
-
-This makes the plan document the natural first commit that creates the PR.
-
-**Context:**
-- Original request and endpoint details
-- Reference to API spec section
-
-**Methodology:**
-- Reference to `@docs/prompts/TDD.md` (don't repeat TDD content)
-- Any endpoint-specific testing considerations
-
-**Feature Requirements:**
-- Request/response format from spec
-- Authentication requirements
-- Validation rules
-- Database operations needed
+This creates the plan document as the natural first commit in the PR.
 
 **Implementation Steps:**
 Detailed checklist following this pattern (TEST FIRST):
 
 ```markdown
 ### Phase 0: Create Plan and Draft PR
-- Create feature branch: `git checkout -b {branch-name}`
-- Create implementation plan document at `docs/prompts/YYYY-MM-DD-{feature}.md`
-- Commit plan: "docs: add implementation plan for {METHOD} {PATH}"
-- Push branch: `git push -u origin {branch-name}`
-- Create DRAFT PR with `gh pr create --draft` including:
-  - Title: "feat: implement {METHOD} {PATH}"
-  - Body referencing the plan document
-  - Mark as draft to indicate work in progress
-- This first commit with plan naturally creates the PR
-- Update plan document with PR link
-- Commit and push: "docs: add PR link to plan"
+
+**Follow workflow from `@.claude/commands/plan.md`:**
+- Create branch, plan document, and draft PR
+- This establishes the foundation with plan as first commit
+
+**Result:**
+- ✅ Branch created and pushed
+- ✅ Plan document committed (first commit)
+- ✅ Draft PR created
+- ✅ Plan updated with PR link
 
 ### Phase 1: Test First (RED)
 - Create test file or add to existing test file
