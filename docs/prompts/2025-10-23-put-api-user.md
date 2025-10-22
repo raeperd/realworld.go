@@ -3,7 +3,7 @@
 ## Status & Links
 
 **Status**: ✅ Completed
-**PR Link**: (to be added when PR is created)
+**PR Link**: https://github.com/raeperd/realworld.go/pull/16
 
 ## Context
 
