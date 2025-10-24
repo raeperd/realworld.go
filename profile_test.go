@@ -181,3 +181,126 @@ func httpPostProfileFollow(t *testing.T, username, token string) *http.Response 
 
 	return res
 }
+
+func TestPostProfilesUsernameFollow_NotFound(t *testing.T) {
+	t.Parallel()
+
+	// Setup: Create follower user
+	unique := fmt.Sprintf("%d", time.Now().UnixNano())
+	followerUsername := "follower_" + unique
+	followerEmail := fmt.Sprintf("follower_%s@example.com", unique)
+	followerReq := UserPostRequestBody{
+		Username: followerUsername,
+		Email:    followerEmail,
+		Password: "testpass123",
+	}
+	followerRes := httpPostUsers(t, followerReq)
+	test.Equal(t, http.StatusCreated, followerRes.StatusCode)
+	t.Cleanup(func() { _ = followerRes.Body.Close() })
+
+	var followerResponse UserResponseBody
+	test.Nil(t, json.NewDecoder(followerRes.Body).Decode(&followerResponse))
+	followerToken := followerResponse.Token
+
+	// Test: Attempt to follow non-existent user
+	nonExistentUsername := fmt.Sprintf("nonexistent_%d", time.Now().UnixNano())
+	res := httpPostProfileFollow(t, nonExistentUsername, followerToken)
+	test.Equal(t, http.StatusNotFound, res.StatusCode)
+	t.Cleanup(func() { _ = res.Body.Close() })
+}
+
+func TestPostProfilesUsernameFollow_FollowSelf(t *testing.T) {
+	t.Parallel()
+
+	// Setup: Create user
+	unique := fmt.Sprintf("%d", time.Now().UnixNano())
+	username := "user_" + unique
+	email := fmt.Sprintf("user_%s@example.com", unique)
+	userReq := UserPostRequestBody{
+		Username: username,
+		Email:    email,
+		Password: "testpass123",
+	}
+	userRes := httpPostUsers(t, userReq)
+	test.Equal(t, http.StatusCreated, userRes.StatusCode)
+	t.Cleanup(func() { _ = userRes.Body.Close() })
+
+	var userResponse UserResponseBody
+	test.Nil(t, json.NewDecoder(userRes.Body).Decode(&userResponse))
+	userToken := userResponse.Token
+
+	// Test: Attempt to follow self
+	res := httpPostProfileFollow(t, username, userToken)
+	test.Equal(t, http.StatusUnprocessableEntity, res.StatusCode)
+	t.Cleanup(func() { _ = res.Body.Close() })
+}
+
+func TestPostProfilesUsernameFollow_AlreadyFollowing(t *testing.T) {
+	t.Parallel()
+
+	// Setup: Create two users
+	unique := fmt.Sprintf("%d", time.Now().UnixNano())
+
+	followerUsername := "follower_" + unique
+	followerEmail := fmt.Sprintf("follower_%s@example.com", unique)
+	followerReq := UserPostRequestBody{
+		Username: followerUsername,
+		Email:    followerEmail,
+		Password: "testpass123",
+	}
+	followerRes := httpPostUsers(t, followerReq)
+	test.Equal(t, http.StatusCreated, followerRes.StatusCode)
+	t.Cleanup(func() { _ = followerRes.Body.Close() })
+
+	var followerResponse UserResponseBody
+	test.Nil(t, json.NewDecoder(followerRes.Body).Decode(&followerResponse))
+	followerToken := followerResponse.Token
+
+	followedUsername := "followed_" + unique
+	followedEmail := fmt.Sprintf("followed_%s@example.com", unique)
+	followedReq := UserPostRequestBody{
+		Username: followedUsername,
+		Email:    followedEmail,
+		Password: "testpass123",
+	}
+	followedRes := httpPostUsers(t, followedReq)
+	test.Equal(t, http.StatusCreated, followedRes.StatusCode)
+	t.Cleanup(func() { _ = followedRes.Body.Close() })
+
+	// First follow
+	firstRes := httpPostProfileFollow(t, followedUsername, followerToken)
+	test.Equal(t, http.StatusOK, firstRes.StatusCode)
+	t.Cleanup(func() { _ = firstRes.Body.Close() })
+
+	// Second follow (should be idempotent)
+	secondRes := httpPostProfileFollow(t, followedUsername, followerToken)
+	test.Equal(t, http.StatusOK, secondRes.StatusCode)
+	t.Cleanup(func() { _ = secondRes.Body.Close() })
+
+	var response ProfileResponseBody
+	test.Nil(t, json.NewDecoder(secondRes.Body).Decode(&response))
+	test.Equal(t, followedUsername, response.Profile.Username)
+	test.Equal(t, true, response.Profile.Following)
+}
+
+func TestPostProfilesUsernameFollow_Unauthorized(t *testing.T) {
+	t.Parallel()
+
+	// Setup: Create a user to follow
+	unique := fmt.Sprintf("%d", time.Now().UnixNano())
+	username := "user_" + unique
+	email := fmt.Sprintf("user_%s@example.com", unique)
+	userReq := UserPostRequestBody{
+		Username: username,
+		Email:    email,
+		Password: "testpass123",
+	}
+	userRes := httpPostUsers(t, userReq)
+	test.Equal(t, http.StatusCreated, userRes.StatusCode)
+	t.Cleanup(func() { _ = userRes.Body.Close() })
+
+	// Test: Attempt to follow without authorization
+	res := httpPostProfileFollow(t, username, "")
+	test.Equal(t, http.StatusUnauthorized, res.StatusCode)
+	t.Cleanup(func() { _ = res.Body.Close() })
+}

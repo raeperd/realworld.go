@@ -86,6 +86,12 @@ func handlePostProfilesUsernameFollow(db *sql.DB, jwtSecret string) http.Handler
 			return
 		}
 
+		// Prevent self-follow
+		if followedUser.ID == followerID {
+			encodeErrorResponse(r.Context(), http.StatusUnprocessableEntity, []error{errors.New("cannot follow yourself")}, w)
+			return
+		}
+
 		// Create follow relationship
 		err = queries.CreateFollow(r.Context(), sqlite.CreateFollowParams{
 			FollowerID: followerID,
