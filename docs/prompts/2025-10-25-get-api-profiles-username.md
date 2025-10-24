@@ -2,7 +2,7 @@
 
 ## Status & Links
 
-Status: [ ] Not Started / [ ] In Progress / [ ] Completed
+Status: [x] Completed
 PR: (to be created)
 
 ## Context
