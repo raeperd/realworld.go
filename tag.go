@@ -28,6 +28,11 @@ func handleGetTags(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
+		// Ensure tags is never null in JSON response
+		if tags == nil {
+			tags = []string{}
+		}
+
 		encodeResponse(r.Context(), http.StatusOK, tagsResponseBody{Tags: tags}, w)
 	}
 }
