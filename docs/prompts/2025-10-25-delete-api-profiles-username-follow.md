@@ -1,7 +1,7 @@
 # DELETE /api/profiles/:username/follow - Unfollow User
 
 **Status:** [ ] Not Started [x] In Progress [ ] Completed
-**PR:** (to be added after creation)
+**PR:** #23
 
 ## Context
 
