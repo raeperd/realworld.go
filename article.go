@@ -194,3 +194,92 @@ type authorProfile struct {
 	Image     string `json:"image"`
 	Following bool   `json:"following"`
 }
+
+func handleGetArticlesSlug(db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		slug := r.PathValue("slug")
+
+		queries := sqlite.New(db)
+
+		// Get article by slug
+		article, err := queries.GetArticleBySlug(r.Context(), slug)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				encodeErrorResponse(r.Context(), http.StatusNotFound, []error{errors.New("article not found")}, w)
+				return
+			}
+			encodeErrorResponse(r.Context(), http.StatusInternalServerError, []error{err}, w)
+			return
+		}
+
+		// Get tags for the article
+		tags, err := queries.GetArticleTagsByArticleID(r.Context(), article.ID)
+		if err != nil {
+			encodeErrorResponse(r.Context(), http.StatusInternalServerError, []error{err}, w)
+			return
+		}
+
+		// Ensure tags is never null in JSON response
+		if tags == nil {
+			tags = []string{}
+		}
+
+		// Get favorites count
+		favoritesCount, err := queries.GetFavoritesCount(r.Context(), article.ID)
+		if err != nil {
+			encodeErrorResponse(r.Context(), http.StatusInternalServerError, []error{err}, w)
+			return
+		}
+
+		// Check if user is authenticated
+		userID, authenticated := r.Context().Value(userIDKey).(int64)
+
+		// Check favorited status if authenticated
+		favorited := false
+		if authenticated {
+			favoritedInt, err := queries.IsFavorited(r.Context(), sqlite.IsFavoritedParams{
+				UserID:    userID,
+				ArticleID: article.ID,
+			})
+			if err != nil {
+				encodeErrorResponse(r.Context(), http.StatusInternalServerError, []error{err}, w)
+				return
+			}
+			favorited = favoritedInt > 0
+		}
+
+		// Check following status if authenticated
+		following := false
+		if authenticated {
+			followingInt, err := queries.IsFollowing(r.Context(), sqlite.IsFollowingParams{
+				FollowerID: userID,
+				FollowedID: article.AuthorID,
+			})
+			if err != nil {
+				encodeErrorResponse(r.Context(), http.StatusInternalServerError, []error{err}, w)
+				return
+			}
+			following = followingInt > 0
+		}
+
+		encodeResponse(r.Context(), http.StatusOK, articleResponseBody{
+			Article: articleResponse{
+				Slug:           article.Slug,
+				Title:          article.Title,
+				Description:    article.Description,
+				Body:           article.Body,
+				TagList:        tags,
+				CreatedAt:      article.CreatedAt.Format("2006-01-02T15:04:05.000Z"),
+				UpdatedAt:      article.UpdatedAt.Format("2006-01-02T15:04:05.000Z"),
+				Favorited:      favorited,
+				FavoritesCount: favoritesCount,
+				Author: authorProfile{
+					Username:  article.AuthorUsername,
+					Bio:       article.AuthorBio.String,
+					Image:     article.AuthorImage.String,
+					Following: following,
+				},
+			},
+		}, w)
+	}
+}
