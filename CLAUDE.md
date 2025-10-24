@@ -120,6 +120,28 @@ When extending the server:
 
 **CRITICAL WORKFLOW REQUIREMENTS**:
 
+### 0. NEVER Work Directly on Main Branch
+
+⚠️ **ABSOLUTE RULE**: NEVER commit any changes directly to the `main` branch.
+
+**Before ANY work** (documentation, code, tests, anything):
+1. **ALWAYS create a feature branch first**: `git checkout -b feat/feature-name` or `git checkout -b docs/doc-name`
+2. **Do ALL work in the feature branch**
+3. **Create PR from feature branch to main**
+4. **Only merge via PR after review**
+
+**If you catch yourself on main branch**:
+- STOP immediately
+- Create proper feature branch: `git checkout -b feat/feature-name`
+- Move commits to feature branch if needed
+- Reset main branch: `git checkout main && git reset --hard origin/main`
+
+**Branch Naming Conventions**:
+- Features: `feat/feature-name` or `feat/api-endpoint-name`
+- Documentation: `docs/doc-name`
+- Bug fixes: `fix/bug-name`
+- Refactoring: `refactor/what-is-refactored`
+
 ### 1. Plan Document MUST Be Created First
 Before writing any code, **always create a plan document** in `docs/prompts/YYYY-MM-DD-feature-name.md`.
 

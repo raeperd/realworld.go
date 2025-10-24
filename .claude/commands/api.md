@@ -5,7 +5,14 @@ argument-hint: METHOD PATH (optional - auto-selects next endpoint if empty)
 
 # API Implementation Command
 
-⚠️ **CRITICAL**: This command MUST follow the plan → draft PR → implement workflow:
+⚠️ **CRITICAL RULES**:
+
+**Rule 0: NEVER work on main branch**
+- ALWAYS create feature branch FIRST: `git checkout -b feat/api-endpoint-name`
+- Do ALL work in feature branch
+- Create PR from feature branch to main
+
+**Rule 1-3: Plan → Draft PR → Implement workflow**
 1. **Create plan document first** (never write code before plan exists)
 2. **Create draft PR immediately after plan** (enables CI visibility for TDD phases)
 3. **Then begin TDD implementation** (RED → GREEN visible in PR with CI status)
