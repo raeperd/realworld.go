@@ -175,6 +175,66 @@ func TestPostArticles_Unauthorized(t *testing.T) {
 	t.Cleanup(func() { _ = res.Body.Close() })
 }
 
+func TestGetArticlesSlug_Success(t *testing.T) {
+	t.Parallel()
+
+	// Setup: Create a user and article
+	unique := fmt.Sprintf("%d", time.Now().UnixNano())
+	username := "article_reader_" + unique
+	email := fmt.Sprintf("reader_%s@example.com", unique)
+
+	userReq := UserPostRequestBody{
+		Username: username,
+		Email:    email,
+		Password: "testpass123",
+	}
+	userRes := httpPostUsers(t, userReq)
+	test.Equal(t, http.StatusCreated, userRes.StatusCode)
+	t.Cleanup(func() { _ = userRes.Body.Close() })
+
+	var userResponse UserResponseBody
+	test.Nil(t, json.NewDecoder(userRes.Body).Decode(&userResponse))
+	token := userResponse.Token
+
+	// Create an article
+	articleReq := ArticlePostRequestBody{
+		Article: ArticlePostRequest{
+			Title:       "Test Article " + unique,
+			Description: "Test description",
+			Body:        "Test body content",
+			TagList:     []string{"test", "golang"},
+		},
+	}
+
+	createRes := httpPostArticles(t, articleReq, token)
+	test.Equal(t, http.StatusCreated, createRes.StatusCode)
+	t.Cleanup(func() { _ = createRes.Body.Close() })
+
+	var createResponse ArticleResponseBody
+	test.Nil(t, json.NewDecoder(createRes.Body).Decode(&createResponse))
+	slug := createResponse.Article.Slug
+
+	// Test: GET /api/articles/:slug without authentication
+	res := httpGetArticlesSlug(t, slug, "")
+	test.Equal(t, http.StatusOK, res.StatusCode)
+	t.Cleanup(func() { _ = res.Body.Close() })
+
+	// Verify response
+	var response ArticleResponseBody
+	test.Nil(t, json.NewDecoder(res.Body).Decode(&response))
+	test.Equal(t, slug, response.Article.Slug)
+	test.Equal(t, "Test Article "+unique, response.Article.Title)
+	test.Equal(t, "Test description", response.Article.Description)
+	test.Equal(t, "Test body content", response.Article.Body)
+	test.Equal(t, 2, len(response.Article.TagList))
+	test.Equal(t, false, response.Article.Favorited)
+	test.Equal(t, int64(0), response.Article.FavoritesCount)
+	test.Equal(t, username, response.Article.Author.Username)
+	test.Equal(t, false, response.Article.Author.Following)
+	test.NotNil(t, response.Article.CreatedAt)
+	test.NotNil(t, response.Article.UpdatedAt)
+}
+
 func httpPostArticles(t *testing.T, reqBody ArticlePostRequestBody, token string) *http.Response {
 	t.Helper()
 
@@ -184,6 +244,21 @@ func httpPostArticles(t *testing.T, reqBody ArticlePostRequestBody, token string
 	req, err := http.NewRequest(http.MethodPost, endpoint+"/api/articles", bytes.NewReader(body))
 	test.Nil(t, err)
 	req.Header.Set("Content-Type", "application/json")
+	if token != "" {
+		req.Header.Set("Authorization", "Token "+token)
+	}
+
+	res, err := http.DefaultClient.Do(req)
+	test.Nil(t, err)
+
+	return res
+}
+
+func httpGetArticlesSlug(t *testing.T, slug string, token string) *http.Response {
+	t.Helper()
+
+	req, err := http.NewRequest(http.MethodGet, endpoint+"/api/articles/"+slug, nil)
+	test.Nil(t, err)
 	if token != "" {
 		req.Header.Set("Authorization", "Token "+token)
 	}
