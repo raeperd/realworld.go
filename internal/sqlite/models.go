@@ -9,6 +9,28 @@ import (
 	"time"
 )
 
+type Article struct {
+	ID          int64
+	Slug        string
+	Title       string
+	Description string
+	Body        string
+	AuthorID    int64
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+}
+
+type ArticleTag struct {
+	ArticleID int64
+	TagID     int64
+}
+
+type Favorite struct {
+	UserID    int64
+	ArticleID int64
+	CreatedAt time.Time
+}
+
 type Follow struct {
 	FollowerID int64
 	FollowedID int64

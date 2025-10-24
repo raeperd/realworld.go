@@ -8,7 +8,58 @@ package sqlite
 import (
 	"context"
 	"database/sql"
+	"time"
 )
+
+const associateArticleTag = `-- name: AssociateArticleTag :exec
+INSERT INTO article_tags (article_id, tag_id) VALUES (?, ?)
+`
+
+type AssociateArticleTagParams struct {
+	ArticleID int64
+	TagID     int64
+}
+
+func (q *Queries) AssociateArticleTag(ctx context.Context, arg AssociateArticleTagParams) error {
+	_, err := q.db.ExecContext(ctx, associateArticleTag, arg.ArticleID, arg.TagID)
+	return err
+}
+
+const createArticle = `-- name: CreateArticle :one
+INSERT INTO articles (slug, title, description, body, author_id)
+VALUES (?, ?, ?, ?, ?)
+RETURNING id, slug, title, description, body, author_id, created_at, updated_at
+`
+
+type CreateArticleParams struct {
+	Slug        string
+	Title       string
+	Description string
+	Body        string
+	AuthorID    int64
+}
+
+func (q *Queries) CreateArticle(ctx context.Context, arg CreateArticleParams) (Article, error) {
+	row := q.db.QueryRowContext(ctx, createArticle,
+		arg.Slug,
+		arg.Title,
+		arg.Description,
+		arg.Body,
+		arg.AuthorID,
+	)
+	var i Article
+	err := row.Scan(
+		&i.ID,
+		&i.Slug,
+		&i.Title,
+		&i.Description,
+		&i.Body,
+		&i.AuthorID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
 
 const createFollow = `-- name: CreateFollow :exec
 INSERT INTO follows (follower_id, followed_id) VALUES (?, ?)
@@ -23,6 +74,19 @@ type CreateFollowParams struct {
 func (q *Queries) CreateFollow(ctx context.Context, arg CreateFollowParams) error {
 	_, err := q.db.ExecContext(ctx, createFollow, arg.FollowerID, arg.FollowedID)
 	return err
+}
+
+const createTag = `-- name: CreateTag :one
+INSERT INTO tags (name) VALUES (?)
+ON CONFLICT(name) DO UPDATE SET name=name
+RETURNING id, name, created_at
+`
+
+func (q *Queries) CreateTag(ctx context.Context, name string) (Tag, error) {
+	row := q.db.QueryRowContext(ctx, createTag, name)
+	var i Tag
+	err := row.Scan(&i.ID, &i.Name, &i.CreatedAt)
+	return i, err
 }
 
 const createUser = `-- name: CreateUser :one
@@ -100,6 +164,92 @@ func (q *Queries) GetAllTags(ctx context.Context) ([]string, error) {
 	return items, nil
 }
 
+const getArticleBySlug = `-- name: GetArticleBySlug :one
+SELECT
+    a.id, a.slug, a.title, a.description, a.body, a.author_id, a.created_at, a.updated_at,
+    u.username as author_username,
+    u.bio as author_bio,
+    u.image as author_image
+FROM articles a
+JOIN users u ON a.author_id = u.id
+WHERE a.slug = ?
+`
+
+type GetArticleBySlugRow struct {
+	ID             int64
+	Slug           string
+	Title          string
+	Description    string
+	Body           string
+	AuthorID       int64
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+	AuthorUsername string
+	AuthorBio      sql.NullString
+	AuthorImage    sql.NullString
+}
+
+func (q *Queries) GetArticleBySlug(ctx context.Context, slug string) (GetArticleBySlugRow, error) {
+	row := q.db.QueryRowContext(ctx, getArticleBySlug, slug)
+	var i GetArticleBySlugRow
+	err := row.Scan(
+		&i.ID,
+		&i.Slug,
+		&i.Title,
+		&i.Description,
+		&i.Body,
+		&i.AuthorID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.AuthorUsername,
+		&i.AuthorBio,
+		&i.AuthorImage,
+	)
+	return i, err
+}
+
+const getArticleTagsByArticleID = `-- name: GetArticleTagsByArticleID :many
+SELECT t.name
+FROM tags t
+JOIN article_tags at ON t.id = at.tag_id
+WHERE at.article_id = ?
+ORDER BY t.name
+`
+
+func (q *Queries) GetArticleTagsByArticleID(ctx context.Context, articleID int64) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, getArticleTagsByArticleID, articleID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return nil, err
+		}
+		items = append(items, name)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getFavoritesCount = `-- name: GetFavoritesCount :one
+SELECT COUNT(*) FROM favorites WHERE article_id = ?
+`
+
+func (q *Queries) GetFavoritesCount(ctx context.Context, articleID int64) (int64, error) {
+	row := q.db.QueryRowContext(ctx, getFavoritesCount, articleID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const getUserByEmail = `-- name: GetUserByEmail :one
 SELECT id, username, email, password, bio, image, created_at, updated_at FROM users WHERE email = ?
 `
@@ -158,6 +308,22 @@ func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User,
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const isFavorited = `-- name: IsFavorited :one
+SELECT EXISTS(SELECT 1 FROM favorites WHERE user_id = ? AND article_id = ?)
+`
+
+type IsFavoritedParams struct {
+	UserID    int64
+	ArticleID int64
+}
+
+func (q *Queries) IsFavorited(ctx context.Context, arg IsFavoritedParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, isFavorited, arg.UserID, arg.ArticleID)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
 }
 
 const isFollowing = `-- name: IsFollowing :one
