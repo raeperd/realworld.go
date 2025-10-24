@@ -60,8 +60,8 @@ func handlePostArticles(db *sql.DB) http.HandlerFunc {
 		// Handle tags if provided
 		if len(request.Article.TagList) > 0 {
 			for _, tagName := range request.Article.TagList {
-				// Create tag (or get existing one)
-				tag, err := queries.CreateTag(r.Context(), tagName)
+				// Get or create tag (upsert)
+				tag, err := queries.GetOrCreateTag(r.Context(), tagName)
 				if err != nil {
 					encodeErrorResponse(r.Context(), http.StatusInternalServerError, []error{err}, w)
 					return

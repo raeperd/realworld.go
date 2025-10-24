@@ -76,19 +76,6 @@ func (q *Queries) CreateFollow(ctx context.Context, arg CreateFollowParams) erro
 	return err
 }
 
-const createTag = `-- name: CreateTag :one
-INSERT INTO tags (name) VALUES (?)
-ON CONFLICT(name) DO UPDATE SET name=name
-RETURNING id, name, created_at
-`
-
-func (q *Queries) CreateTag(ctx context.Context, name string) (Tag, error) {
-	row := q.db.QueryRowContext(ctx, createTag, name)
-	var i Tag
-	err := row.Scan(&i.ID, &i.Name, &i.CreatedAt)
-	return i, err
-}
-
 const createUser = `-- name: CreateUser :one
 INSERT INTO users (username, email, password, bio, image) VALUES (?, ?, ?, ?, ?) RETURNING id, username, email, password, bio, image, created_at, updated_at
 `
@@ -248,6 +235,21 @@ func (q *Queries) GetFavoritesCount(ctx context.Context, articleID int64) (int64
 	var count int64
 	err := row.Scan(&count)
 	return count, err
+}
+
+const getOrCreateTag = `-- name: GetOrCreateTag :one
+INSERT INTO tags (name) VALUES (?)
+ON CONFLICT(name) DO UPDATE SET name=name
+RETURNING id, name, created_at
+`
+
+// Note: The "DO UPDATE SET name=name" is intentional - it's a workaround to make RETURNING *
+// work for both INSERT and conflict cases. ON CONFLICT DO NOTHING won't return the existing row.
+func (q *Queries) GetOrCreateTag(ctx context.Context, name string) (Tag, error) {
+	row := q.db.QueryRowContext(ctx, getOrCreateTag, name)
+	var i Tag
+	err := row.Scan(&i.ID, &i.Name, &i.CreatedAt)
+	return i, err
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one

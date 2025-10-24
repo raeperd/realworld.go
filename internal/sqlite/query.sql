@@ -39,7 +39,9 @@ INSERT INTO articles (slug, title, description, body, author_id)
 VALUES (?, ?, ?, ?, ?)
 RETURNING *;
 
--- name: CreateTag :one
+-- name: GetOrCreateTag :one
+-- Note: The "DO UPDATE SET name=name" is intentional - it's a workaround to make RETURNING *
+-- work for both INSERT and conflict cases. ON CONFLICT DO NOTHING won't return the existing row.
 INSERT INTO tags (name) VALUES (?)
 ON CONFLICT(name) DO UPDATE SET name=name
 RETURNING *;
