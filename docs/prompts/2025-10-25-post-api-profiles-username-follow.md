@@ -91,7 +91,7 @@ CREATE TABLE follows (
 ### Phase 1: Database Queries
 - [ ] Add `CreateFollow` query to `internal/sqlite/query.sql`
 - [ ] Add `IsFollowing` query to `internal/sqlite/query.sql`
-- [ ] Run `make sqlc` to generate Go code
+- [ ] Run `make generate` to generate Go code
 - [ ] Verify generated code compiles: `go build`
 
 ### Phase 2: Test First (RED) - Happy Path
@@ -208,7 +208,7 @@ make lint
 go build
 
 # Generate sqlc code
-make sqlc
+make generate
 ```
 
 ## Notes

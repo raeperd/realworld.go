@@ -61,7 +61,7 @@ This implementation follows Test-Driven Development (TDD) principles as defined 
 
 - [x] Review existing SQL queries in `internal/sqlite/query.sql`
 - [x] Add `DeleteFollow` query to `internal/sqlite/query.sql`
-- [x] Run sqlc to generate Go code: `go run github.com/sqlc-dev/sqlc/cmd/sqlc@latest generate`
+- [x] Run sqlc to generate Go code: `make generate`
 - [x] Verify generated code compiles: `go build`
 
 ### Phase 2: Test First (RED)

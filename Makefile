@@ -18,6 +18,9 @@ lint:
 run: build
 	./$(TARGET_EXEC) --port=$(PORT)
 
+generate:
+	go run github.com/sqlc-dev/sqlc/cmd/sqlc@latest generate
+
 watch:
 	air 
 

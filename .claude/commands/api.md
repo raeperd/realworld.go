@@ -186,7 +186,7 @@ Detailed checklist following this pattern (TEST FIRST):
 
 ### Phase 2: Database Layer (if needed)
 - Add SQL queries to `internal/sqlite/query.sql`
-- Run `make sqlc` to generate Go code
+- Run `make generate` to generate Go code
 - Verify generated code compiles
 
 ### Phase 3: Minimal Implementation (GREEN)
@@ -292,9 +292,9 @@ Follow TDD strictly:
 ### 5. Database Guidelines
 
 **Query Organization:**
-- Add queries to `internal/sqlite/queries.sql`
+- Add queries to `internal/sqlite/query.sql`
 - Use meaningful query names (e.g., `-- name: GetArticleBySlug :one`)
-- Run `make sqlc` after adding queries
+- Run `make generate` after adding queries
 - Handle `sql.ErrNoRows` appropriately
 
 **Transaction Management:**
