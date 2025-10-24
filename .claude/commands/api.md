@@ -29,23 +29,39 @@ If no arguments are provided (empty $ARGUMENTS):
 
 **YOU MUST autonomously find and select the next endpoint - DO NOT ask the user which endpoint to implement!**
 
-1. **Read and analyze** (DO THIS - don't skip!):
-   - Read `@docs/spec.md` to list ALL available endpoints
-   - Read `@main.go` to identify already implemented endpoints
-   - Read `@internal/sqlite/schema.sql` to see available database tables
+⚠️ **CRITICAL**: When `/api` is called without arguments:
+- **DO**: Read the codebase, analyze what's implemented, and make your own decision
+- **DO**: Present your selected endpoint with rationale
+- **DO**: Ask only "Ready to implement [YOUR CHOICE]?"
+- **DO NOT**: Ask "which endpoint should I implement?"
+- **DO NOT**: Present multiple options for the user to choose from
+- **DO NOT**: Wait for the user to tell you what to implement
+
+1. **Read and analyze** (DO THIS FIRST - don't skip!):
+   - Read `docs/spec.md` to list ALL available endpoints
+   - Read `main.go` to identify already implemented endpoints
+   - Read `internal/sqlite/schema.sql` to see available database tables
+   - Check `docs/prompts/` for recently completed implementations
 
 2. **Determine next endpoint** by comparing spec vs implementation:
-   - List unimplemented endpoints
+   - List ALL unimplemented endpoints from spec
    - Analyze dependencies (e.g., articles need users, comments need articles)
    - Consider complexity (prefer simpler when dependencies are equal)
    - Consider feature grouping (complete related endpoints together)
+   - Consider database readiness (prefer endpoints using existing schema)
 
-3. **Select and present** your choice:
+3. **Select and present** your autonomous decision:
    - State the selected endpoint clearly: "Next endpoint to implement: **GET /api/tags**"
-   - Explain rationale in 2-3 sentences
-   - Show what prerequisites are satisfied
+   - Explain rationale in 2-3 sentences covering:
+     - Why this endpoint is the logical next step
+     - What dependencies are satisfied
+     - Expected complexity level
+   - Show what prerequisites exist (database tables, auth system, etc.)
 
 4. **Ask ONLY for confirmation to proceed**: "Ready to implement GET /api/tags?"
+   - Do NOT ask "which endpoint should I implement?"
+   - Do NOT present multiple options for the user to choose
+   - You have already decided - only ask to confirm starting work
 
 5. **On confirmation, proceed immediately** with full workflow:
    - Create branch and plan document → commit → push
@@ -391,14 +407,24 @@ User: /api
 ```
 
 Expected flow:
-1. Read spec and check implemented endpoints
-2. Analyze dependencies and select next logical endpoint
-3. Present selection with clear rationale explaining:
-   - Why this endpoint is chosen
-   - What dependencies are satisfied
-   - Complexity level and implementation effort
-4. Ask: "Ready to implement [SELECTED ENDPOINT]?"
-5. On confirmation, proceed with TDD workflow:
+1. **Read and analyze** (autonomously, without asking):
+   - Read `docs/spec.md` to see all RealWorld API endpoints
+   - Read `main.go` to identify what's already implemented
+   - Read `internal/sqlite/schema.sql` to check database readiness
+   - Check `docs/prompts/` for recent implementations
+2. **Make autonomous decision** (no user input needed):
+   - Compare spec vs implementation to find unimplemented endpoints
+   - Analyze dependencies (articles need users, comments need articles)
+   - Consider complexity and feature grouping
+   - **SELECT the next logical endpoint yourself**
+3. **Present your decision** with clear rationale:
+   - "Next endpoint to implement: **GET /api/tags**"
+   - Explain why (2-3 sentences): dependencies satisfied, complexity level, logical progression
+   - Show prerequisites that exist (database, auth, related endpoints)
+4. **Ask ONLY for confirmation**: "Ready to implement GET /api/tags?"
+   - You've already decided - only confirming to start work
+   - Do NOT ask "which endpoint?" or present multiple options
+5. **On confirmation, proceed** with full TDD workflow:
    - Create branch and plan document → commit → push
    - Create draft PR (plan commit is first in PR)
    - Update plan with PR link → commit → push
@@ -430,25 +456,33 @@ Expected flow:
 
 ## Endpoint Selection Strategy (Auto-Selection Mode)
 
-When no arguments are provided, analyze and select the next endpoint intelligently:
+When no arguments are provided, YOU must analyze and autonomously select the next endpoint:
 
-**Analysis Steps**:
-1. Read `@docs/spec.md` to list all RealWorld API endpoints
-2. Check `@main.go` to identify already implemented endpoints
-3. Check `@internal/sqlite/schema.sql` to see available database tables
-4. Analyze dependencies between endpoints
+**Analysis Steps** (do all of these yourself):
+1. Read `docs/spec.md` to list all RealWorld API endpoints
+2. Read `main.go` to identify already implemented endpoints
+3. Read `internal/sqlite/schema.sql` to see available database tables
+4. Check `docs/prompts/` for recently completed implementations
+5. Analyze dependencies between endpoints
+6. **Make the decision yourself** - do not ask the user which to implement
 
 **Selection Criteria** (in order of importance):
 1. **Dependencies satisfied** - Prerequisite endpoints/tables must exist
 2. **Complexity** - Prefer simpler endpoints when dependencies are equal
 3. **Feature completeness** - Complete related endpoints together when possible
 4. **Database readiness** - Prefer endpoints using existing schema
+5. **Logical progression** - Follow a sensible implementation order
 
-**Present Selection**:
-- Show selected endpoint with clear rationale
-- Explain why this endpoint is the logical next step
-- Mention any dependencies that are satisfied
-- Ask user for confirmation before proceeding
+**Present Your Decision** (not a question):
+- State your selected endpoint clearly and confidently
+- Explain the rationale (2-3 sentences) covering:
+  - Why this is the logical next step
+  - What dependencies are satisfied
+  - Expected complexity level
+- Show prerequisites (database tables, auth, related endpoints)
+- Ask ONLY: "Ready to implement [YOUR SELECTED ENDPOINT]?"
+  - This is asking permission to START work on YOUR decision
+  - This is NOT asking the user to choose an endpoint
 
 ## Benefits of Plan-First Draft PR Approach
 
