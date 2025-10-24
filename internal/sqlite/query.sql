@@ -17,3 +17,6 @@ SET
     image = COALESCE(sqlc.narg('image'), image)
 WHERE id = sqlc.arg('id')
 RETURNING *;
+
+-- name: GetUserByUsername :one
+SELECT * FROM users WHERE username = ?;
