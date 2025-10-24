@@ -310,7 +310,7 @@ func TestGetArticlesSlug_Authenticated(t *testing.T) {
 	test.Nil(t, json.NewDecoder(res.Body).Decode(&response))
 	test.Equal(t, slug, response.Article.Slug)
 	test.Equal(t, "Authenticated Test Article "+unique, response.Article.Title)
-	test.Equal(t, false, response.Article.Favorited) // Reader hasn't favorited
+	test.Equal(t, false, response.Article.Favorited)        // Reader hasn't favorited
 	test.Equal(t, false, response.Article.Author.Following) // Reader doesn't follow author
 	test.Equal(t, authorUsername, response.Article.Author.Username)
 }
