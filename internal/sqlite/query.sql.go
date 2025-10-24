@@ -73,6 +73,33 @@ func (q *Queries) DeleteFollow(ctx context.Context, arg DeleteFollowParams) erro
 	return err
 }
 
+const getAllTags = `-- name: GetAllTags :many
+SELECT name FROM tags ORDER BY name
+`
+
+func (q *Queries) GetAllTags(ctx context.Context) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, getAllTags)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return nil, err
+		}
+		items = append(items, name)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getUserByEmail = `-- name: GetUserByEmail :one
 SELECT id, username, email, password, bio, image, created_at, updated_at FROM users WHERE email = ?
 `

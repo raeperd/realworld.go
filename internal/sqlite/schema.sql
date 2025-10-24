@@ -29,3 +29,9 @@ CREATE TABLE follows (
 );
 
 CREATE INDEX idx_follows_followed_id ON follows(followed_id);
+
+CREATE TABLE tags (
+    id INTEGER PRIMARY KEY,
+    name text NOT NULL UNIQUE,
+    created_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
