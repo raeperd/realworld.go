@@ -20,3 +20,10 @@ RETURNING *;
 
 -- name: GetUserByUsername :one
 SELECT * FROM users WHERE username = ?;
+
+-- name: CreateFollow :exec
+INSERT INTO follows (follower_id, followed_id) VALUES (?, ?)
+ON CONFLICT (follower_id, followed_id) DO NOTHING;
+
+-- name: IsFollowing :one
+SELECT EXISTS(SELECT 1 FROM follows WHERE follower_id = ? AND followed_id = ?);

@@ -121,3 +121,63 @@ func TestGetProfilesUsername_WithAuth(t *testing.T) {
 	test.Equal(t, targetUsername, response.Profile.Username)
 	test.Equal(t, false, response.Profile.Following) // Should be false until follow feature is implemented
 }
+
+func TestPostProfilesUsernameFollow_Success(t *testing.T) {
+	t.Parallel()
+
+	// Setup: Create two users - follower and followed
+	unique := fmt.Sprintf("%d", time.Now().UnixNano())
+
+	// Create follower user
+	followerUsername := "follower_" + unique
+	followerEmail := fmt.Sprintf("follower_%s@example.com", unique)
+	followerReq := UserPostRequestBody{
+		Username: followerUsername,
+		Email:    followerEmail,
+		Password: "testpass123",
+	}
+	followerRes := httpPostUsers(t, followerReq)
+	test.Equal(t, http.StatusCreated, followerRes.StatusCode)
+	t.Cleanup(func() { _ = followerRes.Body.Close() })
+
+	var followerResponse UserResponseBody
+	test.Nil(t, json.NewDecoder(followerRes.Body).Decode(&followerResponse))
+	followerToken := followerResponse.Token
+
+	// Create followed user
+	followedUsername := "followed_" + unique
+	followedEmail := fmt.Sprintf("followed_%s@example.com", unique)
+	followedReq := UserPostRequestBody{
+		Username: followedUsername,
+		Email:    followedEmail,
+		Password: "testpass123",
+	}
+	followedRes := httpPostUsers(t, followedReq)
+	test.Equal(t, http.StatusCreated, followedRes.StatusCode)
+	t.Cleanup(func() { _ = followedRes.Body.Close() })
+
+	// Test: POST /api/profiles/{username}/follow
+	res := httpPostProfileFollow(t, followedUsername, followerToken)
+	test.Equal(t, http.StatusOK, res.StatusCode)
+	t.Cleanup(func() { _ = res.Body.Close() })
+
+	// Verify response contains profile with following: true
+	var response ProfileResponseBody
+	test.Nil(t, json.NewDecoder(res.Body).Decode(&response))
+	test.Equal(t, followedUsername, response.Profile.Username)
+	test.Equal(t, true, response.Profile.Following)
+}
+
+func httpPostProfileFollow(t *testing.T, username, token string) *http.Response {
+	t.Helper()
+
+	req, err := http.NewRequest(http.MethodPost, endpoint+"/api/profiles/"+username+"/follow", nil)
+	test.Nil(t, err)
+
+	req.Header.Set("Authorization", "Token "+token)
+
+	res, err := http.DefaultClient.Do(req)
+	test.Nil(t, err)
+
+	return res
+}
