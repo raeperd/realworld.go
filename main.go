@@ -173,7 +173,8 @@ func route(log *slog.Logger, version string, db *sql.DB, jwtSecret string) http.
 	mux.HandleFunc("POST /api/users/login", handlePostUsersLogin(db, jwtSecret))
 	mux.Handle("GET /api/user", authenticate(handleGetUser(db, jwtSecret), jwtSecret))
 	mux.Handle("PUT /api/user", authenticate(handlePutUser(db, jwtSecret), jwtSecret))
-	mux.HandleFunc("GET /api/profiles/{username}", handleGetProfilesUsername(db))
+	mux.Handle("GET /api/profiles/{username}", authenticateOptional(handleGetProfilesUsername(db), jwtSecret))
+	mux.Handle("POST /api/profiles/{username}/follow", authenticate(handlePostProfilesUsernameFollow(db), jwtSecret))
 
 	handler := cors(mux)
 	handler = accesslog(handler, log)
@@ -354,6 +355,40 @@ func authenticate(next http.Handler, jwtSecret string) http.Handler {
 		claims, err := auth.ParseToken(tokenString, jwtSecret)
 		if err != nil {
 			encodeErrorResponse(r.Context(), http.StatusUnauthorized, []error{errors.New("invalid or expired token")}, w)
+			return
+		}
+
+		// Store user ID in context
+		ctx := context.WithValue(r.Context(), userIDKey, claims.UserID)
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
+// authenticateOptional is a middleware that validates JWT tokens if present and attaches user ID to the request context.
+// Unlike authenticate, this middleware does not return an error if the token is missing.
+// If a token is provided but invalid, it continues without setting the user ID in context.
+func authenticateOptional(next http.Handler, jwtSecret string) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		authHeader := r.Header.Get("Authorization")
+		if authHeader == "" {
+			// No auth header, continue without user ID
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		// Extract token from "Token <jwt>" format
+		tokenString := strings.TrimPrefix(authHeader, "Token ")
+		if tokenString == authHeader {
+			// "Token " prefix not found, continue without user ID
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		// Parse and validate token
+		claims, err := auth.ParseToken(tokenString, jwtSecret)
+		if err != nil {
+			// Invalid token, continue without user ID
+			next.ServeHTTP(w, r)
 			return
 		}
 

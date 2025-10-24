@@ -10,6 +10,21 @@ import (
 	"database/sql"
 )
 
+const createFollow = `-- name: CreateFollow :exec
+INSERT INTO follows (follower_id, followed_id) VALUES (?, ?)
+ON CONFLICT (follower_id, followed_id) DO NOTHING
+`
+
+type CreateFollowParams struct {
+	FollowerID int64
+	FollowedID int64
+}
+
+func (q *Queries) CreateFollow(ctx context.Context, arg CreateFollowParams) error {
+	_, err := q.db.ExecContext(ctx, createFollow, arg.FollowerID, arg.FollowedID)
+	return err
+}
+
 const createUser = `-- name: CreateUser :one
 INSERT INTO users (username, email, password, bio, image) VALUES (?, ?, ?, ?, ?) RETURNING id, username, email, password, bio, image, created_at, updated_at
 `
@@ -102,6 +117,22 @@ func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User,
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const isFollowing = `-- name: IsFollowing :one
+SELECT EXISTS(SELECT 1 FROM follows WHERE follower_id = ? AND followed_id = ?)
+`
+
+type IsFollowingParams struct {
+	FollowerID int64
+	FollowedID int64
+}
+
+func (q *Queries) IsFollowing(ctx context.Context, arg IsFollowingParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, isFollowing, arg.FollowerID, arg.FollowedID)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
 }
 
 const updateUser = `-- name: UpdateUser :one

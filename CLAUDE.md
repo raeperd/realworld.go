@@ -155,12 +155,20 @@ The workflow is strictly:
 6. Commit and push plan update
 7. Begin TDD implementation (RED → GREEN → REFACTOR)
 
+**CRITICAL: Push Every Commit Immediately**:
+- **ALWAYS run `git push` after EVERY commit**
+- This triggers GitHub CI on each commit
+- CI failures are caught immediately, not at the end
+- Each phase (RED, GREEN, REFACTOR) gets its own CI run
+- Never batch commits - push individually
+
 **Why this order matters**:
 - Plan document is the natural first commit that creates the PR
 - Each TDD phase commit (RED/GREEN) triggers CI and shows status in PR
 - Draft PR status prevents premature review
 - Complete implementation history is visible in PR from plan to completion
 - CI failures are caught immediately on each commit
+- Pushing every commit ensures continuous validation
 
 ### 3. Never Implement Without Draft PR
 If you're writing tests or code without a draft PR:

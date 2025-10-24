@@ -9,6 +9,12 @@ import (
 	"time"
 )
 
+type Follow struct {
+	FollowerID int64
+	FollowedID int64
+	CreatedAt  time.Time
+}
+
 type User struct {
 	ID        int64
 	Username  string
