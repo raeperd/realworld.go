@@ -40,42 +40,57 @@ Before starting implementation:
 3. **Identify the database schema** requirements from `@internal/sqlite/schema.sql`
 4. **Review existing code patterns** from similar handlers in the codebase
 
-### 2. Create Implementation Plan
+### 2. Create Implementation Plan and Draft PR
 
-Create a detailed implementation plan document at:
+**Use the plan creation workflow from `@.claude/commands/plan.md`:**
+
+Create implementation plan for the endpoint with:
+- **Title**: "{METHOD} {PATH}"
+- **Description**: Brief summary from API spec
+
+The plan document should be created at:
 `docs/prompts/YYYY-MM-DD-{method}-{path-simplified}.md`
 
-The plan MUST include:
+**Plan Structure** (as defined in plan.md):
+- Status & Links (with PR reference)
+- Context (original request, API spec reference)
+- Methodology (reference to TDD.md)
+- Feature Requirements (request/response, auth, validation, database)
+- Implementation Steps (detailed TDD checklist)
+- Verification Commands
 
-**Status & Links:**
-```
-Status: [ ] Not Started / [ ] In Progress / [x] Completed
-PR: #[number] (when created)
-```
+**Follow plan.md workflow**:
+1. Create branch and plan document
+2. Commit: "docs: add implementation plan for {METHOD} {PATH}"
+3. Push to create branch
+4. Create draft PR with `gh pr create --draft`
+5. Update plan with PR link
+6. Commit and push: "docs: add PR link to plan"
 
-**Context:**
-- Original request and endpoint details
-- Reference to API spec section
-
-**Methodology:**
-- Reference to `@docs/prompts/TDD.md` (don't repeat TDD content)
-- Any endpoint-specific testing considerations
-
-**Feature Requirements:**
-- Request/response format from spec
-- Authentication requirements
-- Validation rules
-- Database operations needed
+This creates the plan document as the natural first commit in the PR.
 
 **Implementation Steps:**
 Detailed checklist following this pattern (TEST FIRST):
 
 ```markdown
+### Phase 0: Create Plan and Draft PR
+
+**Follow workflow from `@.claude/commands/plan.md`:**
+- Create branch, plan document, and draft PR
+- This establishes the foundation with plan as first commit
+
+**Result:**
+- ✅ Branch created and pushed
+- ✅ Plan document committed (first commit)
+- ✅ Draft PR created
+- ✅ Plan updated with PR link
+
 ### Phase 1: Test First (RED)
 - Create test file or add to existing test file
 - Write failing integration test for happy path
 - Run test to confirm it fails: `go test -v -run TestName`
 - Commit: "test: add failing test for {endpoint}"
+- Push to trigger CI (should show RED/failing status)
 
 ### Phase 2: Database Layer (if needed)
 - Add SQL queries to `internal/sqlite/query.sql`
@@ -90,6 +105,7 @@ Detailed checklist following this pattern (TEST FIRST):
 - Run test to confirm it passes: `go test -v -run TestName`
 - Run all tests: `make test`
 - Commit: "feat: implement {endpoint}"
+- Push to trigger CI (should show GREEN/passing status)
 
 ### Phase 4: Edge Cases & Validation (RED → GREEN)
 - Add test for validation error (missing fields)
@@ -100,29 +116,23 @@ Detailed checklist following this pattern (TEST FIRST):
 - Implement not found handling to make test pass
 - Run all tests: `make test`
 - Commit: "test: add edge case tests for {endpoint}"
+- Push to trigger CI
 
 ### Phase 5: Refactor (if needed)
 - Review code for duplication
 - Extract common patterns if found in 3+ places
 - Ensure all tests still pass after each refactoring
 - Commit: "refactor: {description}" (if changes made)
+- Push to trigger CI
 
-### Phase 6: Verification
+### Phase 6: Verification & Finalize PR
 - Run full test suite: `make test`
 - Run linter: `make lint`
 - Manual test with curl or HTTP client
 - Update this plan's status to "Completed"
-
-### Phase 7: Create Pull Request
-- Push branch to remote: `git push -u origin <branch-name>`
-- Create PR with `gh pr create` including:
-  - Concise title: "feat: implement {METHOD} {PATH}"
-  - Summary section with endpoint description
-  - Changes section listing endpoint, database, handler, tests
-  - Test plan section showing coverage and test results
-  - Implementation details mentioning TDD workflow
-- Update plan document with PR link
-- Commit and push plan update
+- Update PR description with final details
+- Mark PR as ready for review: `gh pr ready`
+- **DO NOT merge the PR** - Let the user review and merge when ready
 ```
 
 **Verification Commands:**
@@ -306,11 +316,21 @@ User: /api
 
 Expected flow:
 1. Read spec and check implemented endpoints
-2. Analyze and select next logical endpoint (e.g., "GET /api/tags - simple, no dependencies")
-3. Present selection with rationale to user
-4. Ask: "Ready to implement GET /api/tags?"
-5. On confirmation, proceed with TDD workflow
-6. Create plan, implement, test, commit, create PR
+2. Analyze dependencies and select next logical endpoint
+3. Present selection with clear rationale explaining:
+   - Why this endpoint is chosen
+   - What dependencies are satisfied
+   - Complexity level and implementation effort
+4. Ask: "Ready to implement [SELECTED ENDPOINT]?"
+5. On confirmation, proceed with TDD workflow:
+   - Create branch and plan document → commit → push
+   - Create draft PR (plan commit is first in PR)
+   - Update plan with PR link → commit → push
+   - Write failing test → commit → push → CI shows RED
+   - Implement code → commit → push → CI shows GREEN
+   - Add edge cases → commit → push → CI validates
+   - Refactor if needed → commit → push → CI validates
+   - Mark PR ready for review with `gh pr ready`
 
 ### Mode 2: Manual Selection (With Arguments)
 
@@ -322,31 +342,48 @@ Expected flow:
 1. Read spec for POST /api/articles
 2. Create plan at docs/prompts/2025-10-23-post-api-articles.md
 3. Ask user for confirmation to proceed
-4. Follow TDD cycle: test (RED) → implement (GREEN) → refactor
-5. Make atomic commits at each phase
-6. Verify and mark plan as completed
-7. Create pull request with concise title and description
-8. Update plan with PR link
+4. Create branch and commit plan → push (first commit)
+5. Create draft PR (plan document naturally creates PR)
+6. Update plan with PR link → commit → push
+7. Follow TDD cycle with CI visibility:
+   - Write failing test → commit → push → CI RED
+   - Implement code → commit → push → CI GREEN
+   - Add edge cases → commit → push → CI validates
+   - Refactor if needed → commit → push → CI validates
+8. Mark PR ready for review with `gh pr ready` (not merged automatically)
 
 ## Endpoint Selection Strategy (Auto-Selection Mode)
 
-When no arguments are provided, select the next endpoint based on:
+When no arguments are provided, analyze and select the next endpoint intelligently:
 
-**Priority Order**:
-1. **Tags endpoint** (`GET /api/tags`) - Simplest, no auth, no dependencies
-2. **Profile endpoints** (`GET /api/profiles/:username`) - Simple read operations
-3. **Article read operations** (`GET /api/articles`, `GET /api/articles/:slug`) - Complex but read-only
-4. **Follow/Unfollow** (`POST/DELETE /api/profiles/:username/follow`) - Requires profiles
-5. **Article mutations** (`POST/PUT/DELETE /api/articles`) - Requires articles read
-6. **Comments** (`GET/POST/DELETE /api/articles/:slug/comments`) - Requires articles
-7. **Favorites** (`POST/DELETE /api/articles/:slug/favorite`) - Requires articles
-8. **Feed** (`GET /api/articles/feed`) - Requires articles and follows
+**Analysis Steps**:
+1. Read `@docs/spec.md` to list all RealWorld API endpoints
+2. Check `@main.go` to identify already implemented endpoints
+3. Check `@internal/sqlite/schema.sql` to see available database tables
+4. Analyze dependencies between endpoints
 
-**Selection Criteria**:
-- Dependencies satisfied (prerequisite endpoints implemented)
-- Complexity (simpler endpoints first)
-- Feature completeness (complete one feature before starting another)
-- Database schema ready (tables exist or can be added)
+**Selection Criteria** (in order of importance):
+1. **Dependencies satisfied** - Prerequisite endpoints/tables must exist
+2. **Complexity** - Prefer simpler endpoints when dependencies are equal
+3. **Feature completeness** - Complete related endpoints together when possible
+4. **Database readiness** - Prefer endpoints using existing schema
+
+**Present Selection**:
+- Show selected endpoint with clear rationale
+- Explain why this endpoint is the logical next step
+- Mention any dependencies that are satisfied
+- Ask user for confirmation before proceeding
+
+## Benefits of Plan-First Draft PR Approach
+
+- **Natural First Commit**: Plan document is the logical first commit that creates the PR
+- **Clear Documentation**: PR starts with implementation plan, providing context
+- **CI Visibility**: Each TDD phase (RED → GREEN) is visible in PR commit history with CI status
+- **Early Feedback**: Catch build/lint issues immediately on each commit
+- **Progress Tracking**: PR shows implementation progress in real-time from plan to completion
+- **Draft Status**: Clearly indicates work in progress, preventing premature review
+- **Atomic Commits**: Each commit has clear purpose with CI validation
+- **Complete History**: PR contains full story: plan → RED → GREEN → refactor → done
 
 ## Notes
 
@@ -356,3 +393,4 @@ When no arguments are provided, select the next endpoint based on:
 - Never skip the failing test verification step
 - Prefer integration tests over unit tests
 - Use real database, not mocks
+- Push after each significant commit to trigger CI

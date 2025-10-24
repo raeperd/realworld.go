@@ -166,3 +166,4 @@ When making changes that affect CI:
 - Ensure tests pass locally first: `make test`
 - Check lint issues: `make lint`  
 - Verify Docker build: `make docker`
+- do not merge pr before explicitly requested
