@@ -71,7 +71,7 @@ type profileGetResponseBody struct {
 	Following bool   `json:"following"`
 }
 
-func handlePostProfilesUsernameFollow(db *sql.DB, jwtSecret string) http.HandlerFunc {
+func handlePostProfilesUsernameFollow(db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		username := r.PathValue("username")
 		followerID, ok := r.Context().Value(userIDKey).(int64)

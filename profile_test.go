@@ -76,6 +76,7 @@ func TestGetProfilesUsername_NotFound(t *testing.T) {
 	t.Cleanup(func() { _ = res.Body.Close() })
 }
 
+//nolint:dupl // Test setup duplication is acceptable for clarity
 func TestGetProfilesUsername_WithAuth(t *testing.T) {
 	t.Parallel()
 
@@ -122,6 +123,7 @@ func TestGetProfilesUsername_WithAuth(t *testing.T) {
 	test.Equal(t, false, response.Profile.Following) // Should be false when not following
 }
 
+//nolint:dupl // Test setup duplication is acceptable for clarity
 func TestGetProfilesUsername_WithAuthAfterFollow(t *testing.T) {
 	t.Parallel()
 
@@ -171,6 +173,7 @@ func TestGetProfilesUsername_WithAuthAfterFollow(t *testing.T) {
 	test.Equal(t, true, response.Profile.Following) // Should be true after following
 }
 
+//nolint:dupl // Test setup duplication is acceptable for clarity
 func TestPostProfilesUsernameFollow_Success(t *testing.T) {
 	t.Parallel()
 
@@ -284,6 +287,7 @@ func TestPostProfilesUsernameFollow_FollowSelf(t *testing.T) {
 	t.Cleanup(func() { _ = res.Body.Close() })
 }
 
+//nolint:dupl // Test setup duplication is acceptable for clarity
 func TestPostProfilesUsernameFollow_AlreadyFollowing(t *testing.T) {
 	t.Parallel()
 

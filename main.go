@@ -174,7 +174,7 @@ func route(log *slog.Logger, version string, db *sql.DB, jwtSecret string) http.
 	mux.Handle("GET /api/user", authenticate(handleGetUser(db, jwtSecret), jwtSecret))
 	mux.Handle("PUT /api/user", authenticate(handlePutUser(db, jwtSecret), jwtSecret))
 	mux.Handle("GET /api/profiles/{username}", authenticateOptional(handleGetProfilesUsername(db), jwtSecret))
-	mux.Handle("POST /api/profiles/{username}/follow", authenticate(handlePostProfilesUsernameFollow(db, jwtSecret), jwtSecret))
+	mux.Handle("POST /api/profiles/{username}/follow", authenticate(handlePostProfilesUsernameFollow(db), jwtSecret))
 
 	handler := cors(mux)
 	handler = accesslog(handler, log)
