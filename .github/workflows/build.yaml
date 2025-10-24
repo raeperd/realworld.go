@@ -28,9 +28,9 @@ jobs:
           sqlc diff
       - run: make build VERSION=${{ github.ref_name }}
       - run: make test
-      - uses: shogo82148/actions-goveralls@v1
-        with:
-          path-to-profile: coverage.txt
+      # - uses: shogo82148/actions-goveralls@v1
+      #   with:
+      #     path-to-profile: coverage.txt
       - run: make clean
 
   lint:
