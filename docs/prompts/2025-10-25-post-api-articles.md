@@ -3,7 +3,7 @@
 ## Status & Links
 
 Status: [ ] Not Started [x] In Progress [ ] Completed
-PR: (will be added after PR creation)
+PR: #26
 
 ## Context
 
