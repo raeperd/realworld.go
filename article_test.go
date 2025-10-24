@@ -102,6 +102,79 @@ func TestPostArticles_WithoutTags(t *testing.T) {
 	test.Equal(t, 0, len(response.Article.TagList))
 }
 
+func TestPostArticles_Validation(t *testing.T) {
+	t.Parallel()
+
+	// Setup: Create a user and get token
+	unique := fmt.Sprintf("%d", time.Now().UnixNano())
+	username := "validation_user_" + unique
+	email := fmt.Sprintf("validation_%s@example.com", unique)
+
+	userReq := UserPostRequestBody{
+		Username: username,
+		Email:    email,
+		Password: "testpass123",
+	}
+	userRes := httpPostUsers(t, userReq)
+	test.Equal(t, http.StatusCreated, userRes.StatusCode)
+	t.Cleanup(func() { _ = userRes.Body.Close() })
+
+	var userResponse UserResponseBody
+	test.Nil(t, json.NewDecoder(userRes.Body).Decode(&userResponse))
+	token := userResponse.Token
+
+	testcases := map[string]ArticlePostRequestBody{
+		"title required": {
+			Article: ArticlePostRequest{
+				Title:       "",
+				Description: "Description",
+				Body:        "Body content",
+			},
+		},
+		"description required": {
+			Article: ArticlePostRequest{
+				Title:       "Title",
+				Description: "",
+				Body:        "Body content",
+			},
+		},
+		"body required": {
+			Article: ArticlePostRequest{
+				Title:       "Title",
+				Description: "Description",
+				Body:        "",
+			},
+		},
+	}
+
+	for name, tc := range testcases {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			res := httpPostArticles(t, tc, token)
+			test.Equal(t, http.StatusUnprocessableEntity, res.StatusCode)
+			t.Cleanup(func() { _ = res.Body.Close() })
+		})
+	}
+}
+
+func TestPostArticles_Unauthorized(t *testing.T) {
+	t.Parallel()
+
+	articleReq := ArticlePostRequestBody{
+		Article: ArticlePostRequest{
+			Title:       "Test Article",
+			Description: "Description",
+			Body:        "Body content",
+		},
+	}
+
+	// Test without token
+	res := httpPostArticles(t, articleReq, "")
+	test.Equal(t, http.StatusUnauthorized, res.StatusCode)
+	t.Cleanup(func() { _ = res.Body.Close() })
+}
+
 func httpPostArticles(t *testing.T, reqBody ArticlePostRequestBody, token string) *http.Response {
 	t.Helper()
 
@@ -111,7 +184,9 @@ func httpPostArticles(t *testing.T, reqBody ArticlePostRequestBody, token string
 	req, err := http.NewRequest(http.MethodPost, endpoint+"/api/articles", bytes.NewReader(body))
 	test.Nil(t, err)
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Token "+token)
+	if token != "" {
+		req.Header.Set("Authorization", "Token "+token)
+	}
 
 	res, err := http.DefaultClient.Do(req)
 	test.Nil(t, err)

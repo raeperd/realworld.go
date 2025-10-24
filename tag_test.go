@@ -17,7 +17,9 @@ func TestGetTags_EmptyList(t *testing.T) {
 	t.Cleanup(func() { _ = res.Body.Close() })
 
 	// Verify response has correct structure (tags array is not null)
-	// Note: May contain tags from other parallel tests, so we just verify structure
+	// Note: May contain tags from other parallel tests creating articles with tags
+	// This is acceptable since tags are read-only in the RealWorld spec (no DELETE endpoint)
+	// and are automatically created when articles reference them
 	var response TagsResponseBody
 	test.Nil(t, json.NewDecoder(res.Body).Decode(&response))
 	test.NotNil(t, response.Tags)
