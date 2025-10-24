@@ -33,3 +33,41 @@ DELETE FROM follows WHERE follower_id = ? AND followed_id = ?;
 
 -- name: GetAllTags :many
 SELECT name FROM tags ORDER BY name;
+
+-- name: CreateArticle :one
+INSERT INTO articles (slug, title, description, body, author_id)
+VALUES (?, ?, ?, ?, ?)
+RETURNING *;
+
+-- name: GetOrCreateTag :one
+-- Note: The "DO UPDATE SET name=name" is intentional - it's a workaround to make RETURNING *
+-- work for both INSERT and conflict cases. ON CONFLICT DO NOTHING won't return the existing row.
+INSERT INTO tags (name) VALUES (?)
+ON CONFLICT(name) DO UPDATE SET name=name
+RETURNING *;
+
+-- name: AssociateArticleTag :exec
+INSERT INTO article_tags (article_id, tag_id) VALUES (?, ?);
+
+-- name: GetArticleBySlug :one
+SELECT
+    a.*,
+    u.username as author_username,
+    u.bio as author_bio,
+    u.image as author_image
+FROM articles a
+JOIN users u ON a.author_id = u.id
+WHERE a.slug = ?;
+
+-- name: GetArticleTagsByArticleID :many
+SELECT t.name
+FROM tags t
+JOIN article_tags at ON t.id = at.tag_id
+WHERE at.article_id = ?
+ORDER BY t.name;
+
+-- name: GetFavoritesCount :one
+SELECT COUNT(*) FROM favorites WHERE article_id = ?;
+
+-- name: IsFavorited :one
+SELECT EXISTS(SELECT 1 FROM favorites WHERE user_id = ? AND article_id = ?);

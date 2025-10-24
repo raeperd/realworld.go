@@ -35,3 +35,48 @@ CREATE TABLE tags (
     name text NOT NULL UNIQUE,
     created_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE articles (
+    id INTEGER PRIMARY KEY,
+    slug text NOT NULL UNIQUE,
+    title text NOT NULL,
+    description text NOT NULL,
+    body text NOT NULL,
+    author_id INTEGER NOT NULL,
+    created_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (author_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE TRIGGER update_articles_updated_at
+    AFTER UPDATE OF title, description, body ON articles
+    FOR EACH ROW
+BEGIN
+    UPDATE articles
+    SET updated_at = DATETIME('now')
+    WHERE rowid = NEW.rowid;
+END;
+
+CREATE INDEX idx_articles_author_id ON articles(author_id);
+CREATE INDEX idx_articles_created_at ON articles(created_at DESC);
+
+CREATE TABLE article_tags (
+    article_id INTEGER NOT NULL,
+    tag_id INTEGER NOT NULL,
+    PRIMARY KEY (article_id, tag_id),
+    FOREIGN KEY (article_id) REFERENCES articles(id) ON DELETE CASCADE,
+    FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE
+);
+
+CREATE INDEX idx_article_tags_tag_id ON article_tags(tag_id);
+
+CREATE TABLE favorites (
+    user_id INTEGER NOT NULL,
+    article_id INTEGER NOT NULL,
+    created_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (user_id, article_id),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (article_id) REFERENCES articles(id) ON DELETE CASCADE
+);
+
+CREATE INDEX idx_favorites_article_id ON favorites(article_id);
