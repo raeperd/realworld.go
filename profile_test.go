@@ -234,6 +234,7 @@ func httpPostProfileFollow(t *testing.T, username, token string) *http.Response 
 	return res
 }
 
+//nolint:dupl // Test setup duplication is acceptable for clarity
 func TestPostProfilesUsernameFollow_NotFound(t *testing.T) {
 	t.Parallel()
 
@@ -448,6 +449,7 @@ func TestDeleteProfilesUsernameFollow_Unauthorized(t *testing.T) {
 	t.Cleanup(func() { _ = res.Body.Close() })
 }
 
+//nolint:dupl // Test setup duplication is acceptable for clarity
 func TestDeleteProfilesUsernameFollow_NotFound(t *testing.T) {
 	t.Parallel()
 

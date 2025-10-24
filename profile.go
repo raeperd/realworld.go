@@ -71,6 +71,7 @@ type profileGetResponseBody struct {
 	Following bool   `json:"following"`
 }
 
+//nolint:dupl // Follow and unfollow handlers have intentional structural similarity
 func handlePostProfilesUsernameFollow(db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		username := r.PathValue("username")
@@ -132,6 +133,7 @@ func handlePostProfilesUsernameFollow(db *sql.DB) http.HandlerFunc {
 	}
 }
 
+//nolint:dupl // Follow and unfollow handlers have intentional structural similarity
 func handleDeleteProfilesUsernameFollow(db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		username := r.PathValue("username")
