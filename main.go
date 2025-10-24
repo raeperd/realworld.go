@@ -176,6 +176,7 @@ func route(log *slog.Logger, version string, db *sql.DB, jwtSecret string) http.
 	mux.Handle("GET /api/profiles/{username}", authenticateOptional(handleGetProfilesUsername(db), jwtSecret))
 	mux.Handle("POST /api/profiles/{username}/follow", authenticate(handlePostProfilesUsernameFollow(db), jwtSecret))
 	mux.Handle("DELETE /api/profiles/{username}/follow", authenticate(handleDeleteProfilesUsernameFollow(db), jwtSecret))
+	mux.HandleFunc("GET /api/tags", handleGetTags(db))
 
 	handler := cors(mux)
 	handler = accesslog(handler, log)
