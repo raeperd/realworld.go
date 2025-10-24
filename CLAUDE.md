@@ -118,12 +118,73 @@ When extending the server:
 
 ## Implementation Plans & History
 
-**IMPORTANT**: Before implementing any new feature, check `docs/prompts/` directory for:
+**CRITICAL WORKFLOW REQUIREMENTS**:
+
+### 0. NEVER Work Directly on Main Branch
+
+⚠️ **ABSOLUTE RULE**: NEVER commit any changes directly to the `main` branch.
+
+**Before ANY work** (documentation, code, tests, anything):
+1. **ALWAYS create a feature branch first**: `git checkout -b feat/feature-name` or `git checkout -b docs/doc-name`
+2. **Do ALL work in the feature branch**
+3. **Create PR from feature branch to main**
+4. **Only merge via PR after review**
+
+**If you catch yourself on main branch**:
+- STOP immediately
+- Create proper feature branch: `git checkout -b feat/feature-name`
+- Move commits to feature branch if needed
+- Reset main branch: `git checkout main && git reset --hard origin/main`
+
+**Branch Naming Conventions**:
+- Features: `feat/feature-name` or `feat/api-endpoint-name`
+- Documentation: `docs/doc-name`
+- Bug fixes: `fix/bug-name`
+- Refactoring: `refactor/what-is-refactored`
+
+### 1. Plan Document MUST Be Created First
+Before writing any code, **always create a plan document** in `docs/prompts/YYYY-MM-DD-feature-name.md`.
+
+### 2. Draft PR MUST Be Created After Plan
+The workflow is strictly:
+1. Create feature branch
+2. Create and commit plan document (this is the first commit)
+3. Push branch to remote
+4. Create **DRAFT PR** using `gh pr create --draft`
+5. Update plan document with PR link
+6. Commit and push plan update
+7. Begin TDD implementation (RED → GREEN → REFACTOR)
+
+**Why this order matters**:
+- Plan document is the natural first commit that creates the PR
+- Each TDD phase commit (RED/GREEN) triggers CI and shows status in PR
+- Draft PR status prevents premature review
+- Complete implementation history is visible in PR from plan to completion
+- CI failures are caught immediately on each commit
+
+### 3. Never Implement Without Draft PR
+If you're writing tests or code without a draft PR:
+- **STOP immediately**
+- Create the plan document and draft PR first
+- Then resume implementation
+
+### 4. /api Command Behavior
+
+**When called with no arguments** (`/api`):
+- MUST analyze codebase to find next logical endpoint
+- MUST present selection with rationale
+- MUST ask for user confirmation
+- MUST proceed with full workflow including draft PR creation
+
+**When called with arguments** (`/api GET /api/tags`):
+- MUST follow the complete plan → draft PR → implement workflow
+- MUST NOT skip plan document creation
+- MUST NOT skip draft PR creation
+
+Check `docs/prompts/` directory for:
 - Existing implementation plans and their approach
 - Historical context and decisions made
 - Examples of successful TDD workflows used in this project
-
-When planning a new feature implementation, **always create a new plan document** in `docs/prompts/YYYY-MM-DD-feature-name.md` before starting work.
 
 ### Plan Document Guidelines
 

@@ -5,6 +5,20 @@ argument-hint: METHOD PATH (optional - auto-selects next endpoint if empty)
 
 # API Implementation Command
 
+⚠️ **CRITICAL RULES**:
+
+**Rule 0: NEVER work on main branch**
+- ALWAYS create feature branch FIRST: `git checkout -b feat/api-endpoint-name`
+- Do ALL work in feature branch
+- Create PR from feature branch to main
+
+**Rule 1-3: Plan → Draft PR → Implement workflow**
+1. **Create plan document first** (never write code before plan exists)
+2. **Create draft PR immediately after plan** (enables CI visibility for TDD phases)
+3. **Then begin TDD implementation** (RED → GREEN visible in PR with CI status)
+
+**See `@CLAUDE.md` section "Implementation Plans & History" for complete workflow requirements.**
+
 ## Auto-Selection Mode
 
 **Arguments provided**: $ARGUMENTS
@@ -12,18 +26,36 @@ argument-hint: METHOD PATH (optional - auto-selects next endpoint if empty)
 **Instructions**:
 
 If no arguments are provided (empty $ARGUMENTS):
-1. **Read the API specification** from `@docs/spec.md` to see all endpoints
-2. **Check main.go** to see which endpoints are already implemented
-3. **Analyze and select** the next logical endpoint to implement based on:
-   - Dependencies (implement prerequisite endpoints first)
-   - Complexity (start with simpler endpoints)
-   - Feature grouping (complete related endpoints together)
-4. **Present the selection** to user with rationale
-5. **Ask for confirmation** before proceeding
-6. **Proceed with implementation** using the workflow below
+
+**YOU MUST autonomously find and select the next endpoint - DO NOT ask the user which endpoint to implement!**
+
+1. **Read and analyze** (DO THIS - don't skip!):
+   - Read `@docs/spec.md` to list ALL available endpoints
+   - Read `@main.go` to identify already implemented endpoints
+   - Read `@internal/sqlite/schema.sql` to see available database tables
+
+2. **Determine next endpoint** by comparing spec vs implementation:
+   - List unimplemented endpoints
+   - Analyze dependencies (e.g., articles need users, comments need articles)
+   - Consider complexity (prefer simpler when dependencies are equal)
+   - Consider feature grouping (complete related endpoints together)
+
+3. **Select and present** your choice:
+   - State the selected endpoint clearly: "Next endpoint to implement: **GET /api/tags**"
+   - Explain rationale in 2-3 sentences
+   - Show what prerequisites are satisfied
+
+4. **Ask ONLY for confirmation to proceed**: "Ready to implement GET /api/tags?"
+
+5. **On confirmation, proceed immediately** with full workflow:
+   - Create branch and plan document → commit → push
+   - Create draft PR with plan as first commit
+   - Update plan with PR link → commit → push
+   - Begin TDD: RED → GREEN → REFACTOR (each with commits and CI)
 
 If arguments are provided ($1 and $2):
 - Implement the specified endpoint **$1 $2** directly
+- Still follow the complete plan → draft PR → implement workflow
 
 ---
 
@@ -73,17 +105,61 @@ This creates the plan document as the natural first commit in the PR.
 Detailed checklist following this pattern (TEST FIRST):
 
 ```markdown
-### Phase 0: Create Plan and Draft PR
+### Phase 0: Create Plan and Draft PR (MANDATORY FIRST STEP)
+
+⚠️ **DO NOT PROCEED TO PHASE 1 WITHOUT COMPLETING THIS PHASE!**
 
 **Follow workflow from `@.claude/commands/plan.md`:**
-- Create branch, plan document, and draft PR
-- This establishes the foundation with plan as first commit
 
-**Result:**
-- ✅ Branch created and pushed
-- ✅ Plan document committed (first commit)
-- ✅ Draft PR created
-- ✅ Plan updated with PR link
+1. **Create feature branch**:
+   ```bash
+   git checkout -b feat/api-{endpoint-name}
+   ```
+
+2. **Create plan document**: `docs/prompts/YYYY-MM-DD-{method}-{path}.md`
+   - Include all sections: Status, Context, Methodology, Requirements, Steps, Verification
+   - Mark status as "[ ] Not Started"
+   - Leave PR field as "(to be created)"
+
+3. **Commit plan as first commit**:
+   ```bash
+   git add docs/prompts/YYYY-MM-DD-{method}-{path}.md
+   git commit -m "docs: add implementation plan for {METHOD} {PATH}"
+   git push -u origin feat/api-{endpoint-name}
+   ```
+
+4. **Create DRAFT PR immediately**:
+   ```bash
+   gh pr create --draft \
+     --title "feat: implement {METHOD} {PATH}" \
+     --body "Implementation plan: docs/prompts/YYYY-MM-DD-{method}-{path}.md"
+   ```
+
+5. **Update plan with PR link**:
+   - Change status to "[ ] In Progress"
+   - Add PR link: "PR: https://github.com/{owner}/{repo}/pull/{number}"
+   - Commit and push:
+   ```bash
+   git add docs/prompts/YYYY-MM-DD-{method}-{path}.md
+   git commit -m "docs: add PR link to plan"
+   git push
+   ```
+
+**Why this phase is mandatory**:
+- ✅ Plan document is the first commit that creates the PR
+- ✅ Each subsequent commit (RED/GREEN) triggers CI visible in PR
+- ✅ Draft status prevents premature review
+- ✅ Complete implementation history visible from plan to completion
+- ✅ CI failures caught immediately on each push
+
+**Verification before proceeding**:
+- ✅ Branch exists and pushed to remote
+- ✅ Plan document committed (first commit in branch)
+- ✅ Draft PR created (visible on GitHub)
+- ✅ Plan updated with PR link and pushed
+- ✅ PR shows plan document as first commit
+
+**ONLY AFTER THIS PHASE IS COMPLETE**, proceed to Phase 1 (Test First).
 
 ### Phase 1: Test First (RED)
 - Create test file or add to existing test file
