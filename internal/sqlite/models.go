@@ -15,6 +15,12 @@ type Follow struct {
 	CreatedAt  time.Time
 }
 
+type Tag struct {
+	ID        int64
+	Name      string
+	CreatedAt time.Time
+}
+
 type User struct {
 	ID        int64
 	Username  string

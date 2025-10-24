@@ -30,3 +30,6 @@ SELECT EXISTS(SELECT 1 FROM follows WHERE follower_id = ? AND followed_id = ?);
 
 -- name: DeleteFollow :exec
 DELETE FROM follows WHERE follower_id = ? AND followed_id = ?;
+
+-- name: GetAllTags :many
+SELECT name FROM tags ORDER BY name;
