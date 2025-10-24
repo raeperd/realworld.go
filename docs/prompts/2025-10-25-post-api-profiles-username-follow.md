@@ -2,8 +2,8 @@
 
 ## Status & Links
 
-Status: [ ] Not Started
-PR: (will be added after PR creation)
+Status: [x] In Progress
+PR: https://github.com/raeperd/realworld.go/pull/21
 
 ## Context
 
