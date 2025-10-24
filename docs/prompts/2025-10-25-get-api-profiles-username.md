@@ -3,7 +3,7 @@
 ## Status & Links
 
 Status: [x] Completed
-PR: #19
+PR: https://github.com/raeperd/realworld.go/pull/19
 
 ## Context
 
