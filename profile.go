@@ -30,6 +30,20 @@ func handleGetProfilesUsername(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
+		// Check if authenticated user is following this profile
+		following := false
+		if viewerID, ok := r.Context().Value(userIDKey).(int64); ok {
+			isFollowing, err := queries.IsFollowing(r.Context(), sqlite.IsFollowingParams{
+				FollowerID: viewerID,
+				FollowedID: user.ID,
+			})
+			if err != nil {
+				encodeErrorResponse(r.Context(), http.StatusInternalServerError, []error{err}, w)
+				return
+			}
+			following = isFollowing > 0
+		}
+
 		if err := tx.Commit(); err != nil {
 			encodeErrorResponse(r.Context(), http.StatusInternalServerError, []error{err}, w)
 			return
@@ -40,7 +54,7 @@ func handleGetProfilesUsername(db *sql.DB) http.HandlerFunc {
 				Username:  user.Username,
 				Bio:       user.Bio.String,
 				Image:     user.Image.String,
-				Following: false,
+				Following: following,
 			},
 		}, w)
 	}

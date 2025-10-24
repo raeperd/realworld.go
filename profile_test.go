@@ -119,7 +119,56 @@ func TestGetProfilesUsername_WithAuth(t *testing.T) {
 	var response ProfileResponseBody
 	test.Nil(t, json.NewDecoder(res.Body).Decode(&response))
 	test.Equal(t, targetUsername, response.Profile.Username)
-	test.Equal(t, false, response.Profile.Following) // Should be false until follow feature is implemented
+	test.Equal(t, false, response.Profile.Following) // Should be false when not following
+}
+
+func TestGetProfilesUsername_WithAuthAfterFollow(t *testing.T) {
+	t.Parallel()
+
+	// Setup: Create two users - viewer and target
+	unique := fmt.Sprintf("%d", time.Now().UnixNano())
+
+	viewerUsername := "viewer_" + unique
+	viewerEmail := fmt.Sprintf("viewer_%s@example.com", unique)
+	viewerReq := UserPostRequestBody{
+		Username: viewerUsername,
+		Email:    viewerEmail,
+		Password: "testpass123",
+	}
+	viewerRes := httpPostUsers(t, viewerReq)
+	test.Equal(t, http.StatusCreated, viewerRes.StatusCode)
+	t.Cleanup(func() { _ = viewerRes.Body.Close() })
+
+	var viewerResponse UserResponseBody
+	test.Nil(t, json.NewDecoder(viewerRes.Body).Decode(&viewerResponse))
+	viewerToken := viewerResponse.Token
+
+	targetUsername := "target_" + unique
+	targetEmail := fmt.Sprintf("target_%s@example.com", unique)
+	targetReq := UserPostRequestBody{
+		Username: targetUsername,
+		Email:    targetEmail,
+		Password: "testpass123",
+	}
+	targetRes := httpPostUsers(t, targetReq)
+	test.Equal(t, http.StatusCreated, targetRes.StatusCode)
+	t.Cleanup(func() { _ = targetRes.Body.Close() })
+
+	// Follow the target user
+	followRes := httpPostProfileFollow(t, targetUsername, viewerToken)
+	test.Equal(t, http.StatusOK, followRes.StatusCode)
+	t.Cleanup(func() { _ = followRes.Body.Close() })
+
+	// Test: GET /api/profiles/{username} with authentication after following
+	res := httpGetProfile(t, targetUsername, viewerToken)
+	test.Equal(t, http.StatusOK, res.StatusCode)
+	t.Cleanup(func() { _ = res.Body.Close() })
+
+	// Verify following status is true
+	var response ProfileResponseBody
+	test.Nil(t, json.NewDecoder(res.Body).Decode(&response))
+	test.Equal(t, targetUsername, response.Profile.Username)
+	test.Equal(t, true, response.Profile.Following) // Should be true after following
 }
 
 func TestPostProfilesUsernameFollow_Success(t *testing.T) {
