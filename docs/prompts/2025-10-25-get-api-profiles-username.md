@@ -68,7 +68,7 @@ This implementation follows the Test-Driven Development approach detailed in `@d
 
 ### Phase 1: Database Layer
 - [ ] Add `GetUserByUsername` query to `internal/sqlite/query.sql`
-- [ ] Run `make sqlc` to generate Go code
+- [ ] Run `make generate` to generate Go code
 - [ ] Verify generated code compiles: `go build`
 
 ### Phase 2: Test First (RED) - Happy Path

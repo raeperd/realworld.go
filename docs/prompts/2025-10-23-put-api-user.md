@@ -66,7 +66,7 @@ Following TDD principles as defined in `@docs/prompts/TDD.md`:
 ### Phase 2: Database Layer
 
 - Add `UpdateUser` SQL query to `internal/sqlite/query.sql`
-- Run `make sqlc` to generate Go code
+- Run `make generate` to generate Go code
 - Verify generated code compiles: `go build`
 
 ### Phase 3: Minimal Implementation (GREEN)

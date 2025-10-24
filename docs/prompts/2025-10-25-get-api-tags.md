@@ -65,7 +65,7 @@ We'll need to add the appropriate SQL query to fetch distinct tags.
 ### Phase 0: Schema Investigation & Database Setup
 - [ ] Check `internal/sqlite/schema.sql` for tags table structure
 - [ ] Add SQL query to `internal/sqlite/queries.sql` for fetching all distinct tags
-- [ ] Run `make sqlc` to generate Go code
+- [ ] Run `make generate` to generate Go code
 - [ ] Verify generated code compiles
 
 ### Phase 1: Test First (RED)
