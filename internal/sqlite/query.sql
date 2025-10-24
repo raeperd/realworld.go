@@ -27,3 +27,6 @@ ON CONFLICT (follower_id, followed_id) DO NOTHING;
 
 -- name: IsFollowing :one
 SELECT EXISTS(SELECT 1 FROM follows WHERE follower_id = ? AND followed_id = ?);
+
+-- name: DeleteFollow :exec
+DELETE FROM follows WHERE follower_id = ? AND followed_id = ?;

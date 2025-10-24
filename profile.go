@@ -71,6 +71,7 @@ type profileGetResponseBody struct {
 	Following bool   `json:"following"`
 }
 
+//nolint:dupl // Follow and unfollow handlers have intentional structural similarity
 func handlePostProfilesUsernameFollow(db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		username := r.PathValue("username")
@@ -127,6 +128,68 @@ func handlePostProfilesUsernameFollow(db *sql.DB) http.HandlerFunc {
 				Bio:       followedUser.Bio.String,
 				Image:     followedUser.Image.String,
 				Following: true,
+			},
+		}, w)
+	}
+}
+
+//nolint:dupl // Follow and unfollow handlers have intentional structural similarity
+func handleDeleteProfilesUsernameFollow(db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		username := r.PathValue("username")
+		followerID, ok := r.Context().Value(userIDKey).(int64)
+		if !ok {
+			encodeErrorResponse(r.Context(), http.StatusUnauthorized, []error{errors.New("unauthorized")}, w)
+			return
+		}
+
+		tx, err := db.BeginTx(r.Context(), nil)
+		if err != nil {
+			encodeErrorResponse(r.Context(), http.StatusInternalServerError, []error{err}, w)
+			return
+		}
+		defer func() { _ = tx.Rollback() }()
+
+		queries := sqlite.New(tx)
+
+		// Get user to unfollow
+		followedUser, err := queries.GetUserByUsername(r.Context(), username)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				encodeErrorResponse(r.Context(), http.StatusNotFound, []error{errors.New("profile not found")}, w)
+				return
+			}
+			encodeErrorResponse(r.Context(), http.StatusInternalServerError, []error{err}, w)
+			return
+		}
+
+		// Prevent self-unfollow
+		if followedUser.ID == followerID {
+			encodeErrorResponse(r.Context(), http.StatusUnprocessableEntity, []error{errors.New("cannot unfollow yourself")}, w)
+			return
+		}
+
+		// Delete follow relationship
+		err = queries.DeleteFollow(r.Context(), sqlite.DeleteFollowParams{
+			FollowerID: followerID,
+			FollowedID: followedUser.ID,
+		})
+		if err != nil {
+			encodeErrorResponse(r.Context(), http.StatusInternalServerError, []error{err}, w)
+			return
+		}
+
+		if err := tx.Commit(); err != nil {
+			encodeErrorResponse(r.Context(), http.StatusInternalServerError, []error{err}, w)
+			return
+		}
+
+		encodeResponse(r.Context(), http.StatusOK, profileGetResponseWrapper{
+			Profile: profileGetResponseBody{
+				Username:  followedUser.Username,
+				Bio:       followedUser.Bio.String,
+				Image:     followedUser.Image.String,
+				Following: false,
 			},
 		}, w)
 	}

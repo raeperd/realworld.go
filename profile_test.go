@@ -234,6 +234,7 @@ func httpPostProfileFollow(t *testing.T, username, token string) *http.Response 
 	return res
 }
 
+//nolint:dupl // Test setup duplication is acceptable for clarity
 func TestPostProfilesUsernameFollow_NotFound(t *testing.T) {
 	t.Parallel()
 
@@ -356,4 +357,192 @@ func TestPostProfilesUsernameFollow_Unauthorized(t *testing.T) {
 	res := httpPostProfileFollow(t, username, "")
 	test.Equal(t, http.StatusUnauthorized, res.StatusCode)
 	t.Cleanup(func() { _ = res.Body.Close() })
+}
+
+//nolint:dupl // Test setup duplication is acceptable for clarity
+func TestDeleteProfilesUsernameFollow_Success(t *testing.T) {
+	t.Parallel()
+
+	// Setup: Create two users - follower and followed
+	unique := fmt.Sprintf("%d", time.Now().UnixNano())
+
+	// Create follower user
+	followerUsername := "follower_" + unique
+	followerEmail := fmt.Sprintf("follower_%s@example.com", unique)
+	followerReq := UserPostRequestBody{
+		Username: followerUsername,
+		Email:    followerEmail,
+		Password: "testpass123",
+	}
+	followerRes := httpPostUsers(t, followerReq)
+	test.Equal(t, http.StatusCreated, followerRes.StatusCode)
+	t.Cleanup(func() { _ = followerRes.Body.Close() })
+
+	var followerResponse UserResponseBody
+	test.Nil(t, json.NewDecoder(followerRes.Body).Decode(&followerResponse))
+	followerToken := followerResponse.Token
+
+	// Create followed user
+	followedUsername := "followed_" + unique
+	followedEmail := fmt.Sprintf("followed_%s@example.com", unique)
+	followedReq := UserPostRequestBody{
+		Username: followedUsername,
+		Email:    followedEmail,
+		Password: "testpass123",
+	}
+	followedRes := httpPostUsers(t, followedReq)
+	test.Equal(t, http.StatusCreated, followedRes.StatusCode)
+	t.Cleanup(func() { _ = followedRes.Body.Close() })
+
+	// First follow the user
+	followRes := httpPostProfileFollow(t, followedUsername, followerToken)
+	test.Equal(t, http.StatusOK, followRes.StatusCode)
+	t.Cleanup(func() { _ = followRes.Body.Close() })
+
+	// Test: DELETE /api/profiles/{username}/follow
+	res := httpDeleteProfileFollow(t, followedUsername, followerToken)
+	test.Equal(t, http.StatusOK, res.StatusCode)
+	t.Cleanup(func() { _ = res.Body.Close() })
+
+	// Verify response contains profile with following: false
+	var response ProfileResponseBody
+	test.Nil(t, json.NewDecoder(res.Body).Decode(&response))
+	test.Equal(t, followedUsername, response.Profile.Username)
+	test.Equal(t, false, response.Profile.Following)
+}
+
+func httpDeleteProfileFollow(t *testing.T, username, token string) *http.Response {
+	t.Helper()
+
+	req, err := http.NewRequest(http.MethodDelete, endpoint+"/api/profiles/"+username+"/follow", nil)
+	test.Nil(t, err)
+
+	if token != "" {
+		req.Header.Set("Authorization", "Token "+token)
+	}
+
+	res, err := http.DefaultClient.Do(req)
+	test.Nil(t, err)
+
+	return res
+}
+
+func TestDeleteProfilesUsernameFollow_Unauthorized(t *testing.T) {
+	t.Parallel()
+
+	// Setup: Create a user to unfollow
+	unique := fmt.Sprintf("%d", time.Now().UnixNano())
+	username := "user_" + unique
+	email := fmt.Sprintf("user_%s@example.com", unique)
+	userReq := UserPostRequestBody{
+		Username: username,
+		Email:    email,
+		Password: "testpass123",
+	}
+	userRes := httpPostUsers(t, userReq)
+	test.Equal(t, http.StatusCreated, userRes.StatusCode)
+	t.Cleanup(func() { _ = userRes.Body.Close() })
+
+	// Test: Attempt to unfollow without authorization
+	res := httpDeleteProfileFollow(t, username, "")
+	test.Equal(t, http.StatusUnauthorized, res.StatusCode)
+	t.Cleanup(func() { _ = res.Body.Close() })
+}
+
+//nolint:dupl // Test setup duplication is acceptable for clarity
+func TestDeleteProfilesUsernameFollow_NotFound(t *testing.T) {
+	t.Parallel()
+
+	// Setup: Create follower user
+	unique := fmt.Sprintf("%d", time.Now().UnixNano())
+	followerUsername := "follower_" + unique
+	followerEmail := fmt.Sprintf("follower_%s@example.com", unique)
+	followerReq := UserPostRequestBody{
+		Username: followerUsername,
+		Email:    followerEmail,
+		Password: "testpass123",
+	}
+	followerRes := httpPostUsers(t, followerReq)
+	test.Equal(t, http.StatusCreated, followerRes.StatusCode)
+	t.Cleanup(func() { _ = followerRes.Body.Close() })
+
+	var followerResponse UserResponseBody
+	test.Nil(t, json.NewDecoder(followerRes.Body).Decode(&followerResponse))
+	followerToken := followerResponse.Token
+
+	// Test: Attempt to unfollow non-existent user
+	nonExistentUsername := fmt.Sprintf("nonexistent_%d", time.Now().UnixNano())
+	res := httpDeleteProfileFollow(t, nonExistentUsername, followerToken)
+	test.Equal(t, http.StatusNotFound, res.StatusCode)
+	t.Cleanup(func() { _ = res.Body.Close() })
+}
+
+func TestDeleteProfilesUsernameFollow_UnfollowSelf(t *testing.T) {
+	t.Parallel()
+
+	// Setup: Create user
+	unique := fmt.Sprintf("%d", time.Now().UnixNano())
+	username := "user_" + unique
+	email := fmt.Sprintf("user_%s@example.com", unique)
+	userReq := UserPostRequestBody{
+		Username: username,
+		Email:    email,
+		Password: "testpass123",
+	}
+	userRes := httpPostUsers(t, userReq)
+	test.Equal(t, http.StatusCreated, userRes.StatusCode)
+	t.Cleanup(func() { _ = userRes.Body.Close() })
+
+	var userResponse UserResponseBody
+	test.Nil(t, json.NewDecoder(userRes.Body).Decode(&userResponse))
+	userToken := userResponse.Token
+
+	// Test: Attempt to unfollow self
+	res := httpDeleteProfileFollow(t, username, userToken)
+	test.Equal(t, http.StatusUnprocessableEntity, res.StatusCode)
+	t.Cleanup(func() { _ = res.Body.Close() })
+}
+
+//nolint:dupl // Test setup duplication is acceptable for clarity
+func TestDeleteProfilesUsernameFollow_AlreadyUnfollowed(t *testing.T) {
+	t.Parallel()
+
+	// Setup: Create two users
+	unique := fmt.Sprintf("%d", time.Now().UnixNano())
+
+	followerUsername := "follower_" + unique
+	followerEmail := fmt.Sprintf("follower_%s@example.com", unique)
+	followerReq := UserPostRequestBody{
+		Username: followerUsername,
+		Email:    followerEmail,
+		Password: "testpass123",
+	}
+	followerRes := httpPostUsers(t, followerReq)
+	test.Equal(t, http.StatusCreated, followerRes.StatusCode)
+	t.Cleanup(func() { _ = followerRes.Body.Close() })
+
+	var followerResponse UserResponseBody
+	test.Nil(t, json.NewDecoder(followerRes.Body).Decode(&followerResponse))
+	followerToken := followerResponse.Token
+
+	followedUsername := "followed_" + unique
+	followedEmail := fmt.Sprintf("followed_%s@example.com", unique)
+	followedReq := UserPostRequestBody{
+		Username: followedUsername,
+		Email:    followedEmail,
+		Password: "testpass123",
+	}
+	followedRes := httpPostUsers(t, followedReq)
+	test.Equal(t, http.StatusCreated, followedRes.StatusCode)
+	t.Cleanup(func() { _ = followedRes.Body.Close() })
+
+	// Test: Unfollow user that is not currently followed (should be idempotent)
+	res := httpDeleteProfileFollow(t, followedUsername, followerToken)
+	test.Equal(t, http.StatusOK, res.StatusCode)
+	t.Cleanup(func() { _ = res.Body.Close() })
+
+	var response ProfileResponseBody
+	test.Nil(t, json.NewDecoder(res.Body).Decode(&response))
+	test.Equal(t, followedUsername, response.Profile.Username)
+	test.Equal(t, false, response.Profile.Following)
 }

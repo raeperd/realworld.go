@@ -59,6 +59,20 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 	return i, err
 }
 
+const deleteFollow = `-- name: DeleteFollow :exec
+DELETE FROM follows WHERE follower_id = ? AND followed_id = ?
+`
+
+type DeleteFollowParams struct {
+	FollowerID int64
+	FollowedID int64
+}
+
+func (q *Queries) DeleteFollow(ctx context.Context, arg DeleteFollowParams) error {
+	_, err := q.db.ExecContext(ctx, deleteFollow, arg.FollowerID, arg.FollowedID)
+	return err
+}
+
 const getUserByEmail = `-- name: GetUserByEmail :one
 SELECT id, username, email, password, bio, image, created_at, updated_at FROM users WHERE email = ?
 `
