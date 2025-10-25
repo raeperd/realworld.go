@@ -28,6 +28,10 @@ ON CONFLICT (follower_id, followed_id) DO NOTHING;
 -- name: IsFollowing :one
 SELECT EXISTS(SELECT 1 FROM follows WHERE follower_id = ? AND followed_id = ?);
 
+-- name: GetFollowingByIDs :many
+SELECT followed_id FROM follows
+WHERE follower_id = ? AND followed_id IN (sqlc.slice('followed_ids'));
+
 -- name: DeleteFollow :exec
 DELETE FROM follows WHERE follower_id = ? AND followed_id = ?;
 

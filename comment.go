@@ -168,26 +168,36 @@ func handleGetArticlesSlugComments(db *sql.DB) http.HandlerFunc {
 
 		// Build following status map to avoid N+1 queries
 		followingMap := make(map[int64]bool)
-		if userID != 0 {
-			// Collect unique author IDs
-			authorIDs := make(map[int64]struct{})
+		if userID != 0 && len(comments) > 0 {
+			// Collect unique author IDs (excluding current user)
+			authorIDsMap := make(map[int64]struct{})
 			for i := range comments {
 				if comments[i].AuthorID != userID {
-					authorIDs[comments[i].AuthorID] = struct{}{}
+					authorIDsMap[comments[i].AuthorID] = struct{}{}
 				}
 			}
 
-			// Batch check following status for all authors
-			for authorID := range authorIDs {
-				isFollowingInt, err := queries.IsFollowing(r.Context(), sqlite.IsFollowingParams{
-					FollowerID: userID,
-					FollowedID: authorID,
+			// Convert map to slice for batch query
+			if len(authorIDsMap) > 0 {
+				authorIDs := make([]int64, 0, len(authorIDsMap))
+				for id := range authorIDsMap {
+					authorIDs = append(authorIDs, id)
+				}
+
+				// Single batch query to get all following relationships
+				followedIDs, err := queries.GetFollowingByIDs(r.Context(), sqlite.GetFollowingByIDsParams{
+					FollowerID:  userID,
+					FollowedIds: authorIDs,
 				})
 				if err != nil {
 					encodeErrorResponse(r.Context(), http.StatusInternalServerError, []error{err}, w)
 					return
 				}
-				followingMap[authorID] = isFollowingInt == 1
+
+				// Build map for O(1) lookups
+				for _, followedID := range followedIDs {
+					followingMap[followedID] = true
+				}
 			}
 		}
 
