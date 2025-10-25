@@ -301,6 +301,66 @@ func (q *Queries) GetCommentWithAuthor(ctx context.Context, id int64) (GetCommen
 	return i, err
 }
 
+const getCommentsByArticleSlug = `-- name: GetCommentsByArticleSlug :many
+SELECT
+    c.id,
+    c.body,
+    c.created_at,
+    c.updated_at,
+    c.author_id,
+    u.username as author_username,
+    u.bio as author_bio,
+    u.image as author_image
+FROM comments c
+JOIN articles a ON c.article_id = a.id
+JOIN users u ON c.author_id = u.id
+WHERE a.slug = ?
+ORDER BY c.created_at DESC
+`
+
+type GetCommentsByArticleSlugRow struct {
+	ID             int64
+	Body           string
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+	AuthorID       int64
+	AuthorUsername string
+	AuthorBio      sql.NullString
+	AuthorImage    sql.NullString
+}
+
+func (q *Queries) GetCommentsByArticleSlug(ctx context.Context, slug string) ([]GetCommentsByArticleSlugRow, error) {
+	rows, err := q.db.QueryContext(ctx, getCommentsByArticleSlug, slug)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetCommentsByArticleSlugRow
+	for rows.Next() {
+		var i GetCommentsByArticleSlugRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Body,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.AuthorID,
+			&i.AuthorUsername,
+			&i.AuthorBio,
+			&i.AuthorImage,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getFavoritesCount = `-- name: GetFavoritesCount :one
 SELECT COUNT(*) FROM favorites WHERE article_id = ?
 `

@@ -99,3 +99,19 @@ SELECT
 FROM comments c
 JOIN users u ON c.author_id = u.id
 WHERE c.id = ?;
+
+-- name: GetCommentsByArticleSlug :many
+SELECT
+    c.id,
+    c.body,
+    c.created_at,
+    c.updated_at,
+    c.author_id,
+    u.username as author_username,
+    u.bio as author_bio,
+    u.image as author_image
+FROM comments c
+JOIN articles a ON c.article_id = a.id
+JOIN users u ON c.author_id = u.id
+WHERE a.slug = ?
+ORDER BY c.created_at DESC;
