@@ -82,6 +82,21 @@ func (q *Queries) CountArticles(ctx context.Context) (int64, error) {
 	return count, err
 }
 
+const countArticlesFeed = `-- name: CountArticlesFeed :one
+SELECT COUNT(*)
+FROM articles a
+WHERE a.author_id IN (
+    SELECT followed_id FROM follows WHERE follower_id = ?
+)
+`
+
+func (q *Queries) CountArticlesFeed(ctx context.Context, followerID int64) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countArticlesFeed, followerID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createArticle = `-- name: CreateArticle :one
 INSERT INTO articles (slug, title, description, body, author_id)
 VALUES (?, ?, ?, ?, ?)
@@ -746,6 +761,80 @@ func (q *Queries) ListArticles(ctx context.Context, arg ListArticlesParams) ([]L
 	var items []ListArticlesRow
 	for rows.Next() {
 		var i ListArticlesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Slug,
+			&i.Title,
+			&i.Description,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.AuthorID,
+			&i.AuthorUsername,
+			&i.AuthorBio,
+			&i.AuthorImage,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listArticlesFeed = `-- name: ListArticlesFeed :many
+SELECT
+    a.id,
+    a.slug,
+    a.title,
+    a.description,
+    a.created_at,
+    a.updated_at,
+    a.author_id,
+    u.username as author_username,
+    u.bio as author_bio,
+    u.image as author_image
+FROM articles a
+JOIN users u ON a.author_id = u.id
+WHERE a.author_id IN (
+    SELECT followed_id FROM follows WHERE follower_id = ?
+)
+ORDER BY a.created_at DESC
+LIMIT ? OFFSET ?
+`
+
+type ListArticlesFeedParams struct {
+	FollowerID int64
+	Limit      int64
+	Offset     int64
+}
+
+type ListArticlesFeedRow struct {
+	ID             int64
+	Slug           string
+	Title          string
+	Description    string
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+	AuthorID       int64
+	AuthorUsername string
+	AuthorBio      sql.NullString
+	AuthorImage    sql.NullString
+}
+
+func (q *Queries) ListArticlesFeed(ctx context.Context, arg ListArticlesFeedParams) ([]ListArticlesFeedRow, error) {
+	rows, err := q.db.QueryContext(ctx, listArticlesFeed, arg.FollowerID, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListArticlesFeedRow
+	for rows.Next() {
+		var i ListArticlesFeedRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.Slug,

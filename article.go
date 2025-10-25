@@ -739,6 +739,136 @@ func parseInt64(s string) (int64, error) {
 	return result, err
 }
 
+func handleGetArticlesFeed(db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// Get authenticated user ID from context (required for feed)
+		userID, ok := r.Context().Value(userIDKey).(int64)
+		if !ok {
+			encodeErrorResponse(r.Context(), http.StatusUnauthorized, []error{errors.New("unauthorized")}, w)
+			return
+		}
+
+		// Parse query parameters
+		queryParams := r.URL.Query()
+		limit := int64(20) // default
+		offset := int64(0) // default
+
+		if limitStr := queryParams.Get("limit"); limitStr != "" {
+			if parsedLimit, err := parseInt64(limitStr); err == nil && parsedLimit > 0 {
+				limit = parsedLimit
+			}
+		}
+
+		if offsetStr := queryParams.Get("offset"); offsetStr != "" {
+			if parsedOffset, err := parseInt64(offsetStr); err == nil && parsedOffset >= 0 {
+				offset = parsedOffset
+			}
+		}
+
+		queries := sqlite.New(db)
+
+		// Get articles from followed users
+		articles, err := queries.ListArticlesFeed(r.Context(), sqlite.ListArticlesFeedParams{
+			FollowerID: userID,
+			Limit:      limit,
+			Offset:     offset,
+		})
+		if err != nil {
+			encodeErrorResponse(r.Context(), http.StatusInternalServerError, []error{err}, w)
+			return
+		}
+
+		// Get total count of articles in feed
+		totalCount, err := queries.CountArticlesFeed(r.Context(), userID)
+		if err != nil {
+			encodeErrorResponse(r.Context(), http.StatusInternalServerError, []error{err}, w)
+			return
+		}
+
+		// Build article IDs for batch queries
+		articleIDs := make([]int64, len(articles))
+		for i := range articles {
+			articleIDs[i] = articles[i].ID
+		}
+
+		// Get favorites counts for all articles
+		favoritesMap := make(map[int64]int64)
+		if len(articleIDs) > 0 {
+			favoritesCounts, err := queries.GetFavoritesByArticleIDs(r.Context(), articleIDs)
+			if err != nil {
+				encodeErrorResponse(r.Context(), http.StatusInternalServerError, []error{err}, w)
+				return
+			}
+			for _, fc := range favoritesCounts {
+				favoritesMap[fc.ArticleID] = fc.Count
+			}
+		}
+
+		// Get favorited status
+		favoritedMap := make(map[int64]bool)
+		if len(articleIDs) > 0 {
+			favoritedArticles, err := queries.CheckFavoritedByUser(r.Context(), sqlite.CheckFavoritedByUserParams{
+				UserID:     userID,
+				ArticleIds: articleIDs,
+			})
+			if err != nil {
+				encodeErrorResponse(r.Context(), http.StatusInternalServerError, []error{err}, w)
+				return
+			}
+			for _, articleID := range favoritedArticles {
+				favoritedMap[articleID] = true
+			}
+		}
+
+		// Batch fetch tags for all articles
+		tagsMap := make(map[int64][]string)
+		if len(articleIDs) > 0 {
+			articleTags, err := queries.GetArticleTagsByArticleIDs(r.Context(), articleIDs)
+			if err != nil {
+				encodeErrorResponse(r.Context(), http.StatusInternalServerError, []error{err}, w)
+				return
+			}
+			for _, at := range articleTags {
+				tagsMap[at.ArticleID] = append(tagsMap[at.ArticleID], at.Name)
+			}
+		}
+
+		// Build response
+		responseArticles := make([]articleListResponse, len(articles))
+		for i := range articles {
+			// Get tags for this article from map
+			tags := tagsMap[articles[i].ID]
+
+			// Ensure tags is never null
+			if tags == nil {
+				tags = []string{}
+			}
+
+			responseArticles[i] = articleListResponse{
+				Slug:           articles[i].Slug,
+				Title:          articles[i].Title,
+				Description:    articles[i].Description,
+				TagList:        tags,
+				CreatedAt:      articles[i].CreatedAt.Format("2006-01-02T15:04:05.000Z"),
+				UpdatedAt:      articles[i].UpdatedAt.Format("2006-01-02T15:04:05.000Z"),
+				Favorited:      favoritedMap[articles[i].ID],
+				FavoritesCount: favoritesMap[articles[i].ID],
+				Author: authorProfile{
+					Username:  articles[i].AuthorUsername,
+					Bio:       articles[i].AuthorBio.String,
+					Image:     articles[i].AuthorImage.String,
+					Following: true, // Always true in feed (articles are from followed users)
+				},
+			}
+		}
+
+		encodeResponse(r.Context(), http.StatusOK, articlesResponseBody{
+			Articles:      responseArticles,
+			ArticlesCount: totalCount,
+		}, w)
+	}
+}
+
 type articlesResponseBody struct {
 	Articles      []articleListResponse `json:"articles"`
 	ArticlesCount int64                 `json:"articlesCount"`
