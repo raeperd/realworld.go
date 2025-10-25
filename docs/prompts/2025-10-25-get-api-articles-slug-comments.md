@@ -1,6 +1,6 @@
 # Implementation Plan: GET /api/articles/:slug/comments
 
-**Status**: [ ] In Progress
+**Status**: [x] Completed
 **PR**: #31
 
 ## Context
