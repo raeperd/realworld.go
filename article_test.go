@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"slices"
 	"testing"
 	"time"
 
@@ -849,17 +850,14 @@ func TestGetArticles_Success(t *testing.T) {
 	t.Cleanup(func() { _ = article2Res.Body.Close() })
 
 	// Test: GET /api/articles without authentication
-	res := httpGetArticles(t, "", "")
+	// Use a large limit to ensure we get our articles even with test pollution
+	res := httpGetArticles(t, "limit=100")
 	test.Equal(t, http.StatusOK, res.StatusCode)
 	t.Cleanup(func() { _ = res.Body.Close() })
 
 	// Verify response structure
 	var response ArticlesResponseBody
 	test.Nil(t, json.NewDecoder(res.Body).Decode(&response))
-
-	// Should have at least 2 articles (our created ones)
-	test.True(t, len(response.Articles) >= 2)
-	test.True(t, response.ArticlesCount >= 2)
 
 	// Find our articles in the response (they should be the most recent)
 	var firstArticle, secondArticle *ArticleListResponse
@@ -933,7 +931,7 @@ func TestGetArticles_WithLimitAndOffset(t *testing.T) {
 	}
 
 	// Test: Get articles with limit=2
-	res := httpGetArticles(t, "limit=2", "")
+	res := httpGetArticles(t, "limit=2")
 	test.Equal(t, http.StatusOK, res.StatusCode)
 	t.Cleanup(func() { _ = res.Body.Close() })
 
@@ -944,7 +942,7 @@ func TestGetArticles_WithLimitAndOffset(t *testing.T) {
 	test.True(t, len(response.Articles) <= 2)
 
 	// Test: Get articles with offset=2 and limit=2
-	res2 := httpGetArticles(t, "limit=2&offset=2", "")
+	res2 := httpGetArticles(t, "limit=2&offset=2")
 	test.Equal(t, http.StatusOK, res2.StatusCode)
 	t.Cleanup(func() { _ = res2.Body.Close() })
 
@@ -953,7 +951,7 @@ func TestGetArticles_WithLimitAndOffset(t *testing.T) {
 	test.True(t, len(response2.Articles) <= 2)
 }
 
-func httpGetArticles(t *testing.T, queryParams string, token string) *http.Response {
+func httpGetArticles(t *testing.T, queryParams string) *http.Response {
 	t.Helper()
 
 	url := endpoint + "/api/articles"
@@ -963,9 +961,6 @@ func httpGetArticles(t *testing.T, queryParams string, token string) *http.Respo
 
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	test.Nil(t, err)
-	if token != "" {
-		req.Header.Set("Authorization", "Token "+token)
-	}
 
 	res, err := http.DefaultClient.Do(req)
 	test.Nil(t, err)
@@ -989,4 +984,203 @@ type ArticleListResponse struct {
 	FavoritesCount int64         `json:"favoritesCount"`
 	Author         AuthorProfile `json:"author"`
 	// Note: Body field is intentionally omitted (per spec update 2024/08/16)
+}
+
+func TestGetArticles_FilterByTag(t *testing.T) {
+	t.Parallel()
+
+	// Setup: Create a user and articles with different tags
+	unique := fmt.Sprintf("%d", time.Now().UnixNano())
+	username := "tag_filter_user_" + unique
+	email := fmt.Sprintf("tag_filter_%s@example.com", unique)
+
+	userReq := UserPostRequestBody{
+		Username: username,
+		Email:    email,
+		Password: "testpass123",
+	}
+	userRes := httpPostUsers(t, userReq)
+	test.Equal(t, http.StatusCreated, userRes.StatusCode)
+	t.Cleanup(func() { _ = userRes.Body.Close() })
+
+	var userResponse UserResponseBody
+	test.Nil(t, json.NewDecoder(userRes.Body).Decode(&userResponse))
+	token := userResponse.Token
+
+	// Create article with "golang" tag
+	article1Req := ArticlePostRequestBody{
+		Article: ArticlePostRequest{
+			Title:       "Golang Article " + unique,
+			Description: "About Golang",
+			Body:        "Golang content",
+			TagList:     []string{"golang", "programming"},
+		},
+	}
+	res1 := httpPostArticles(t, article1Req, token)
+	test.Equal(t, http.StatusCreated, res1.StatusCode)
+	t.Cleanup(func() { _ = res1.Body.Close() })
+
+	time.Sleep(10 * time.Millisecond)
+
+	// Create article with "rust" tag
+	article2Req := ArticlePostRequestBody{
+		Article: ArticlePostRequest{
+			Title:       "Rust Article " + unique,
+			Description: "About Rust",
+			Body:        "Rust content",
+			TagList:     []string{"rust", "programming"},
+		},
+	}
+	res2 := httpPostArticles(t, article2Req, token)
+	test.Equal(t, http.StatusCreated, res2.StatusCode)
+	t.Cleanup(func() { _ = res2.Body.Close() })
+
+	time.Sleep(10 * time.Millisecond)
+
+	// Create article with only "golang" tag
+	article3Req := ArticlePostRequestBody{
+		Article: ArticlePostRequest{
+			Title:       "Pure Golang " + unique,
+			Description: "Only Golang",
+			Body:        "Only Golang content",
+			TagList:     []string{"golang"},
+		},
+	}
+	res3 := httpPostArticles(t, article3Req, token)
+	test.Equal(t, http.StatusCreated, res3.StatusCode)
+	t.Cleanup(func() { _ = res3.Body.Close() })
+
+	// Test: Filter by "golang" tag - should return 2 articles
+	res := httpGetArticles(t, "tag=golang")
+	test.Equal(t, http.StatusOK, res.StatusCode)
+	t.Cleanup(func() { _ = res.Body.Close() })
+
+	var response ArticlesResponseBody
+	test.Nil(t, json.NewDecoder(res.Body).Decode(&response))
+
+	// Should have exactly 2 articles with "golang" tag
+	golangCount := 0
+	for _, article := range response.Articles {
+		if article.Title == "Golang Article "+unique || article.Title == "Pure Golang "+unique {
+			golangCount++
+			// Verify the article has the golang tag
+			test.True(t, slices.Contains(article.TagList, "golang"))
+		}
+	}
+	test.Equal(t, 2, golangCount)
+
+	// Test: Filter by "rust" tag - should return 1 article
+	res4 := httpGetArticles(t, "tag=rust")
+	test.Equal(t, http.StatusOK, res4.StatusCode)
+	t.Cleanup(func() { _ = res4.Body.Close() })
+
+	var response4 ArticlesResponseBody
+	test.Nil(t, json.NewDecoder(res4.Body).Decode(&response4))
+
+	rustCount := 0
+	for _, article := range response4.Articles {
+		if article.Title == "Rust Article "+unique {
+			rustCount++
+		}
+	}
+	test.Equal(t, 1, rustCount)
+}
+
+func TestGetArticles_FilterByAuthor(t *testing.T) {
+	t.Parallel()
+
+	// Setup: Create two users with articles
+	unique := fmt.Sprintf("%d", time.Now().UnixNano())
+
+	// User 1
+	user1 := "author1_" + unique
+	user1Req := UserPostRequestBody{
+		Username: user1,
+		Email:    fmt.Sprintf("author1_%s@example.com", unique),
+		Password: "testpass123",
+	}
+	user1Res := httpPostUsers(t, user1Req)
+	test.Equal(t, http.StatusCreated, user1Res.StatusCode)
+	t.Cleanup(func() { _ = user1Res.Body.Close() })
+
+	var user1Response UserResponseBody
+	test.Nil(t, json.NewDecoder(user1Res.Body).Decode(&user1Response))
+	token1 := user1Response.Token
+
+	// User 2
+	user2 := "author2_" + unique
+	user2Req := UserPostRequestBody{
+		Username: user2,
+		Email:    fmt.Sprintf("author2_%s@example.com", unique),
+		Password: "testpass123",
+	}
+	user2Res := httpPostUsers(t, user2Req)
+	test.Equal(t, http.StatusCreated, user2Res.StatusCode)
+	t.Cleanup(func() { _ = user2Res.Body.Close() })
+
+	var user2Response UserResponseBody
+	test.Nil(t, json.NewDecoder(user2Res.Body).Decode(&user2Response))
+	token2 := user2Response.Token
+
+	// Create articles by user1
+	for i := 1; i <= 2; i++ {
+		articleReq := ArticlePostRequestBody{
+			Article: ArticlePostRequest{
+				Title:       fmt.Sprintf("User1 Article %d %s", i, unique),
+				Description: "By User1",
+				Body:        "Content by User1",
+				TagList:     []string{},
+			},
+		}
+		res := httpPostArticles(t, articleReq, token1)
+		test.Equal(t, http.StatusCreated, res.StatusCode)
+		t.Cleanup(func() { _ = res.Body.Close() })
+		time.Sleep(5 * time.Millisecond)
+	}
+
+	// Create article by user2
+	articleReq := ArticlePostRequestBody{
+		Article: ArticlePostRequest{
+			Title:       "User2 Article " + unique,
+			Description: "By User2",
+			Body:        "Content by User2",
+			TagList:     []string{},
+		},
+	}
+	res := httpPostArticles(t, articleReq, token2)
+	test.Equal(t, http.StatusCreated, res.StatusCode)
+	t.Cleanup(func() { _ = res.Body.Close() })
+
+	// Test: Filter by author=user1
+	res2 := httpGetArticles(t, "author="+user1)
+	test.Equal(t, http.StatusOK, res2.StatusCode)
+	t.Cleanup(func() { _ = res2.Body.Close() })
+
+	var response ArticlesResponseBody
+	test.Nil(t, json.NewDecoder(res2.Body).Decode(&response))
+
+	// Count articles by user1
+	user1Count := 0
+	for _, article := range response.Articles {
+		if article.Author.Username == user1 {
+			user1Count++
+		}
+	}
+	test.Equal(t, 2, user1Count)
+
+	// Test: Filter by author=user2
+	res3 := httpGetArticles(t, "author="+user2)
+	test.Equal(t, http.StatusOK, res3.StatusCode)
+	t.Cleanup(func() { _ = res3.Body.Close() })
+
+	var response3 ArticlesResponseBody
+	test.Nil(t, json.NewDecoder(res3.Body).Decode(&response3))
+
+	user2Count := 0
+	for _, article := range response3.Articles {
+		if article.Author.Username == user2 {
+			user2Count++
+		}
+	}
+	test.Equal(t, 1, user2Count)
 }

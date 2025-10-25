@@ -651,7 +651,6 @@ func listArticlesWithFilters(ctx context.Context, db *sql.DB, tag, author, favor
 	// Build WHERE clauses
 	var whereClauses []string
 	var args []any
-	argIndex := 1
 
 	if tag != "" {
 		query += `
@@ -660,15 +659,13 @@ func listArticlesWithFilters(ctx context.Context, db *sql.DB, tag, author, favor
 		countQuery += `
 		JOIN article_tags at ON a.id = at.article_id
 		JOIN tags t ON at.tag_id = t.id`
-		whereClauses = append(whereClauses, fmt.Sprintf("t.name = $%d", argIndex))
+		whereClauses = append(whereClauses, "t.name = ?")
 		args = append(args, tag)
-		argIndex++
 	}
 
 	if author != "" {
-		whereClauses = append(whereClauses, fmt.Sprintf("u.username = $%d", argIndex))
+		whereClauses = append(whereClauses, "u.username = ?")
 		args = append(args, author)
-		argIndex++
 	}
 
 	if favorited != "" {
@@ -678,9 +675,8 @@ func listArticlesWithFilters(ctx context.Context, db *sql.DB, tag, author, favor
 		countQuery += `
 		JOIN favorites f ON a.id = f.article_id
 		JOIN users fu ON f.user_id = fu.id`
-		whereClauses = append(whereClauses, fmt.Sprintf("fu.username = $%d", argIndex))
+		whereClauses = append(whereClauses, "fu.username = ?")
 		args = append(args, favorited)
-		argIndex++
 	}
 
 	if len(whereClauses) > 0 {
@@ -689,9 +685,9 @@ func listArticlesWithFilters(ctx context.Context, db *sql.DB, tag, author, favor
 		countQuery += whereClause
 	}
 
-	query += fmt.Sprintf(`
+	query += `
 		ORDER BY a.created_at DESC
-		LIMIT $%d OFFSET $%d`, argIndex, argIndex+1)
+		LIMIT ? OFFSET ?`
 	args = append(args, limit, offset)
 
 	// Get total count first
