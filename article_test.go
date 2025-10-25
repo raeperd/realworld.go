@@ -1271,6 +1271,124 @@ func TestGetArticlesFeed_Success(t *testing.T) {
 	test.True(t, found)
 }
 
+func TestGetArticlesFeed_EmptyFeed(t *testing.T) {
+	t.Parallel()
+
+	// Setup: Create a user who doesn't follow anyone
+	unique := fmt.Sprintf("%d", time.Now().UnixNano())
+	username := "lonely_user_" + unique
+	email := fmt.Sprintf("lonely_%s@example.com", unique)
+
+	userReq := UserPostRequestBody{
+		Username: username,
+		Email:    email,
+		Password: "testpass123",
+	}
+	userRes := httpPostUsers(t, userReq)
+	test.Equal(t, http.StatusCreated, userRes.StatusCode)
+	t.Cleanup(func() { _ = userRes.Body.Close() })
+
+	var userResponse UserResponseBody
+	test.Nil(t, json.NewDecoder(userRes.Body).Decode(&userResponse))
+	token := userResponse.Token
+
+	// Test: GET /api/articles/feed should return empty
+	res := httpGetArticlesFeed(t, "", token)
+	test.Equal(t, http.StatusOK, res.StatusCode)
+	t.Cleanup(func() { _ = res.Body.Close() })
+
+	var response ArticlesResponseBody
+	test.Nil(t, json.NewDecoder(res.Body).Decode(&response))
+	test.Equal(t, int64(0), response.ArticlesCount)
+	test.Equal(t, 0, len(response.Articles))
+}
+
+func TestGetArticlesFeed_Unauthorized(t *testing.T) {
+	t.Parallel()
+
+	// Test: GET /api/articles/feed without token should return 401
+	res := httpGetArticlesFeed(t, "", "")
+	test.Equal(t, http.StatusUnauthorized, res.StatusCode)
+	t.Cleanup(func() { _ = res.Body.Close() })
+}
+
+func TestGetArticlesFeed_Pagination(t *testing.T) {
+	t.Parallel()
+
+	// Setup: Create follower and followed users
+	unique := fmt.Sprintf("%d", time.Now().UnixNano())
+
+	followerUsername := "follower_" + unique
+	followerEmail := fmt.Sprintf("follower_%s@example.com", unique)
+	followerReq := UserPostRequestBody{
+		Username: followerUsername,
+		Email:    followerEmail,
+		Password: "testpass123",
+	}
+	followerRes := httpPostUsers(t, followerReq)
+	test.Equal(t, http.StatusCreated, followerRes.StatusCode)
+	t.Cleanup(func() { _ = followerRes.Body.Close() })
+
+	var followerResponse UserResponseBody
+	test.Nil(t, json.NewDecoder(followerRes.Body).Decode(&followerResponse))
+	followerToken := followerResponse.Token
+
+	followedUsername := "followed_" + unique
+	followedEmail := fmt.Sprintf("followed_%s@example.com", unique)
+	followedReq := UserPostRequestBody{
+		Username: followedUsername,
+		Email:    followedEmail,
+		Password: "testpass123",
+	}
+	followedRes := httpPostUsers(t, followedReq)
+	test.Equal(t, http.StatusCreated, followedRes.StatusCode)
+	t.Cleanup(func() { _ = followedRes.Body.Close() })
+
+	var followedResponse UserResponseBody
+	test.Nil(t, json.NewDecoder(followedRes.Body).Decode(&followedResponse))
+	followedToken := followedResponse.Token
+
+	// Follower follows the followed user
+	followRes := httpPostProfileFollow(t, followedUsername, followerToken)
+	test.Equal(t, http.StatusOK, followRes.StatusCode)
+	t.Cleanup(func() { _ = followRes.Body.Close() })
+
+	// Create 3 articles
+	for i := 0; i < 3; i++ {
+		articleReq := ArticlePostRequestBody{
+			Article: ArticlePostRequest{
+				Title:       fmt.Sprintf("Article %d %s", i, unique),
+				Description: "Test article",
+				Body:        "Content",
+				TagList:     []string{},
+			},
+		}
+		articleRes := httpPostArticles(t, articleReq, followedToken)
+		test.Equal(t, http.StatusCreated, articleRes.StatusCode)
+		t.Cleanup(func() { _ = articleRes.Body.Close() })
+	}
+
+	// Test: limit=2
+	res1 := httpGetArticlesFeed(t, "limit=2", followerToken)
+	test.Equal(t, http.StatusOK, res1.StatusCode)
+	t.Cleanup(func() { _ = res1.Body.Close() })
+
+	var response1 ArticlesResponseBody
+	test.Nil(t, json.NewDecoder(res1.Body).Decode(&response1))
+	test.Equal(t, int64(3), response1.ArticlesCount)
+	test.Equal(t, 2, len(response1.Articles))
+
+	// Test: offset=2
+	res2 := httpGetArticlesFeed(t, "offset=2", followerToken)
+	test.Equal(t, http.StatusOK, res2.StatusCode)
+	t.Cleanup(func() { _ = res2.Body.Close() })
+
+	var response2 ArticlesResponseBody
+	test.Nil(t, json.NewDecoder(res2.Body).Decode(&response2))
+	test.Equal(t, int64(3), response2.ArticlesCount)
+	test.Equal(t, 1, len(response2.Articles))
+}
+
 func httpGetArticlesFeed(t *testing.T, queryParams string, token string) *http.Response {
 	t.Helper()
 
