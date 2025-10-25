@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -467,6 +468,9 @@ func handleGetArticles(db *sql.DB) http.HandlerFunc {
 		queryParams := r.URL.Query()
 		limit := int64(20) // default
 		offset := int64(0) // default
+		tag := queryParams.Get("tag")
+		author := queryParams.Get("author")
+		favorited := queryParams.Get("favorited")
 
 		if limitStr := queryParams.Get("limit"); limitStr != "" {
 			if parsedLimit, err := parseInt64(limitStr); err == nil && parsedLimit > 0 {
@@ -482,21 +486,35 @@ func handleGetArticles(db *sql.DB) http.HandlerFunc {
 
 		queries := sqlite.New(db)
 
-		// Get articles
-		articles, err := queries.ListArticles(r.Context(), sqlite.ListArticlesParams{
-			Limit:  limit,
-			Offset: offset,
-		})
-		if err != nil {
-			encodeErrorResponse(r.Context(), http.StatusInternalServerError, []error{err}, w)
-			return
-		}
+		// Build WHERE clause for filtering
+		var articles []sqlite.ListArticlesRow
+		var totalCount int64
+		var err error
 
-		// Get total count
-		totalCount, err := queries.CountArticles(r.Context())
-		if err != nil {
-			encodeErrorResponse(r.Context(), http.StatusInternalServerError, []error{err}, w)
-			return
+		// If filters are provided, use raw SQL (sqlc doesn't handle dynamic WHERE well)
+		if tag != "" || author != "" || favorited != "" {
+			articles, totalCount, err = listArticlesWithFilters(r.Context(), db, tag, author, favorited, limit, offset)
+			if err != nil {
+				encodeErrorResponse(r.Context(), http.StatusInternalServerError, []error{err}, w)
+				return
+			}
+		} else {
+			// Use sqlc-generated query for simple case
+			articles, err = queries.ListArticles(r.Context(), sqlite.ListArticlesParams{
+				Limit:  limit,
+				Offset: offset,
+			})
+			if err != nil {
+				encodeErrorResponse(r.Context(), http.StatusInternalServerError, []error{err}, w)
+				return
+			}
+
+			// Get total count
+			totalCount, err = queries.CountArticles(r.Context())
+			if err != nil {
+				encodeErrorResponse(r.Context(), http.StatusInternalServerError, []error{err}, w)
+				return
+			}
 		}
 
 		// Check if user is authenticated
@@ -597,6 +615,117 @@ func handleGetArticles(db *sql.DB) http.HandlerFunc {
 			ArticlesCount: totalCount,
 		}, w)
 	}
+}
+
+func listArticlesWithFilters(ctx context.Context, db *sql.DB, tag, author, favorited string, limit, offset int64) ([]sqlite.ListArticlesRow, int64, error) {
+	// Build base query
+	query := `
+		SELECT DISTINCT
+			a.id,
+			a.slug,
+			a.title,
+			a.description,
+			a.created_at,
+			a.updated_at,
+			a.author_id,
+			u.username as author_username,
+			u.bio as author_bio,
+			u.image as author_image
+		FROM articles a
+		JOIN users u ON a.author_id = u.id`
+
+	countQuery := `
+		SELECT COUNT(DISTINCT a.id)
+		FROM articles a
+		JOIN users u ON a.author_id = u.id`
+
+	// Build WHERE clauses
+	var whereClauses []string
+	var args []interface{}
+	argIndex := 1
+
+	if tag != "" {
+		query += `
+		JOIN article_tags at ON a.id = at.article_id
+		JOIN tags t ON at.tag_id = t.id`
+		countQuery += `
+		JOIN article_tags at ON a.id = at.article_id
+		JOIN tags t ON at.tag_id = t.id`
+		whereClauses = append(whereClauses, fmt.Sprintf("t.name = $%d", argIndex))
+		args = append(args, tag)
+		argIndex++
+	}
+
+	if author != "" {
+		whereClauses = append(whereClauses, fmt.Sprintf("u.username = $%d", argIndex))
+		args = append(args, author)
+		argIndex++
+	}
+
+	if favorited != "" {
+		query += `
+		JOIN favorites f ON a.id = f.article_id
+		JOIN users fu ON f.user_id = fu.id`
+		countQuery += `
+		JOIN favorites f ON a.id = f.article_id
+		JOIN users fu ON f.user_id = fu.id`
+		whereClauses = append(whereClauses, fmt.Sprintf("fu.username = $%d", argIndex))
+		args = append(args, favorited)
+		argIndex++
+	}
+
+	if len(whereClauses) > 0 {
+		whereClause := " WHERE " + strings.Join(whereClauses, " AND ")
+		query += whereClause
+		countQuery += whereClause
+	}
+
+	query += fmt.Sprintf(`
+		ORDER BY a.created_at DESC
+		LIMIT $%d OFFSET $%d`, argIndex, argIndex+1)
+	args = append(args, limit, offset)
+
+	// Get total count first
+	var totalCount int64
+	countArgs := args[:len(args)-2] // Remove limit and offset for count
+	err := db.QueryRowContext(ctx, countQuery, countArgs...).Scan(&totalCount)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	// Query articles
+	rows, err := db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var articles []sqlite.ListArticlesRow
+	for rows.Next() {
+		var article sqlite.ListArticlesRow
+		err := rows.Scan(
+			&article.ID,
+			&article.Slug,
+			&article.Title,
+			&article.Description,
+			&article.CreatedAt,
+			&article.UpdatedAt,
+			&article.AuthorID,
+			&article.AuthorUsername,
+			&article.AuthorBio,
+			&article.AuthorImage,
+		)
+		if err != nil {
+			return nil, 0, err
+		}
+		articles = append(articles, article)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, 0, err
+	}
+
+	return articles, totalCount, nil
 }
 
 func parseInt64(s string) (int64, error) {

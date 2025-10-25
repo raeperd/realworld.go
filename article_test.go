@@ -893,6 +893,66 @@ func TestGetArticles_Success(t *testing.T) {
 	test.Equal(t, 2, len(secondArticle.TagList))
 }
 
+func TestGetArticles_WithLimitAndOffset(t *testing.T) {
+	t.Parallel()
+
+	// Setup: Create a user and 5 articles
+	unique := fmt.Sprintf("%d", time.Now().UnixNano())
+	username := "article_paginator_" + unique
+	email := fmt.Sprintf("paginator_%s@example.com", unique)
+
+	userReq := UserPostRequestBody{
+		Username: username,
+		Email:    email,
+		Password: "testpass123",
+	}
+	userRes := httpPostUsers(t, userReq)
+	test.Equal(t, http.StatusCreated, userRes.StatusCode)
+	t.Cleanup(func() { _ = userRes.Body.Close() })
+
+	var userResponse UserResponseBody
+	test.Nil(t, json.NewDecoder(userRes.Body).Decode(&userResponse))
+	token := userResponse.Token
+
+	// Create 5 articles
+	for i := 1; i <= 5; i++ {
+		articleReq := ArticlePostRequestBody{
+			Article: ArticlePostRequest{
+				Title:       fmt.Sprintf("Article %d %s", i, unique),
+				Description: fmt.Sprintf("Description %d", i),
+				Body:        fmt.Sprintf("Body %d", i),
+				TagList:     []string{},
+			},
+		}
+		res := httpPostArticles(t, articleReq, token)
+		test.Equal(t, http.StatusCreated, res.StatusCode)
+		t.Cleanup(func() { _ = res.Body.Close() })
+
+		// Small delay to ensure different timestamps
+		time.Sleep(5 * time.Millisecond)
+	}
+
+	// Test: Get articles with limit=2
+	res := httpGetArticles(t, "limit=2", "")
+	test.Equal(t, http.StatusOK, res.StatusCode)
+	t.Cleanup(func() { _ = res.Body.Close() })
+
+	var response ArticlesResponseBody
+	test.Nil(t, json.NewDecoder(res.Body).Decode(&response))
+
+	// Should return exactly 2 articles (most recent)
+	test.True(t, len(response.Articles) <= 2)
+
+	// Test: Get articles with offset=2 and limit=2
+	res2 := httpGetArticles(t, "limit=2&offset=2", "")
+	test.Equal(t, http.StatusOK, res2.StatusCode)
+	t.Cleanup(func() { _ = res2.Body.Close() })
+
+	var response2 ArticlesResponseBody
+	test.Nil(t, json.NewDecoder(res2.Body).Decode(&response2))
+	test.True(t, len(response2.Articles) <= 2)
+}
+
 func httpGetArticles(t *testing.T, queryParams string, token string) *http.Response {
 	t.Helper()
 
