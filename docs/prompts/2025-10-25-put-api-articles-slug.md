@@ -1,7 +1,7 @@
 # Implementation Plan: PUT /api/articles/:slug
 
 **Status**: [ ] Not Started / [x] In Progress / [ ] Completed
-**PR**: (will be added after PR creation)
+**PR**: #28
 
 ## Context
 
