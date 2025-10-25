@@ -344,6 +344,47 @@ func (q *Queries) IsFollowing(ctx context.Context, arg IsFollowingParams) (int64
 	return column_1, err
 }
 
+const updateArticle = `-- name: UpdateArticle :one
+UPDATE articles
+SET
+    slug = COALESCE(?1, slug),
+    title = COALESCE(?2, title),
+    description = COALESCE(?3, description),
+    body = COALESCE(?4, body)
+WHERE id = ?5
+RETURNING id, slug, title, description, body, author_id, created_at, updated_at
+`
+
+type UpdateArticleParams struct {
+	Slug        sql.NullString
+	Title       sql.NullString
+	Description sql.NullString
+	Body        sql.NullString
+	ID          int64
+}
+
+func (q *Queries) UpdateArticle(ctx context.Context, arg UpdateArticleParams) (Article, error) {
+	row := q.db.QueryRowContext(ctx, updateArticle,
+		arg.Slug,
+		arg.Title,
+		arg.Description,
+		arg.Body,
+		arg.ID,
+	)
+	var i Article
+	err := row.Scan(
+		&i.ID,
+		&i.Slug,
+		&i.Title,
+		&i.Description,
+		&i.Body,
+		&i.AuthorID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const updateUser = `-- name: UpdateUser :one
 UPDATE users
 SET

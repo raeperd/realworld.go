@@ -71,3 +71,13 @@ SELECT COUNT(*) FROM favorites WHERE article_id = ?;
 
 -- name: IsFavorited :one
 SELECT EXISTS(SELECT 1 FROM favorites WHERE user_id = ? AND article_id = ?);
+
+-- name: UpdateArticle :one
+UPDATE articles
+SET
+    slug = COALESCE(sqlc.narg('slug'), slug),
+    title = COALESCE(sqlc.narg('title'), title),
+    description = COALESCE(sqlc.narg('description'), description),
+    body = COALESCE(sqlc.narg('body'), body)
+WHERE id = sqlc.arg('id')
+RETURNING *;
