@@ -577,15 +577,24 @@ func handleGetArticles(db *sql.DB) http.HandlerFunc {
 			}
 		}
 
-		// Build response
-		responseArticles := make([]articleListResponse, len(articles))
-		for i := range articles {
-			// Get tags for this article
-			tags, err := queries.GetArticleTagsByArticleID(r.Context(), articles[i].ID)
+		// Batch fetch tags for all articles
+		tagsMap := make(map[int64][]string)
+		if len(articleIDs) > 0 {
+			articleTags, err := queries.GetArticleTagsByArticleIDs(r.Context(), articleIDs)
 			if err != nil {
 				encodeErrorResponse(r.Context(), http.StatusInternalServerError, []error{err}, w)
 				return
 			}
+			for _, at := range articleTags {
+				tagsMap[at.ArticleID] = append(tagsMap[at.ArticleID], at.Name)
+			}
+		}
+
+		// Build response
+		responseArticles := make([]articleListResponse, len(articles))
+		for i := range articles {
+			// Get tags for this article from map
+			tags := tagsMap[articles[i].ID]
 
 			// Ensure tags is never null
 			if tags == nil {

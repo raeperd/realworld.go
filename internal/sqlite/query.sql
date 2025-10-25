@@ -70,6 +70,13 @@ JOIN article_tags at ON t.id = at.tag_id
 WHERE at.article_id = ?
 ORDER BY t.name;
 
+-- name: GetArticleTagsByArticleIDs :many
+SELECT at.article_id, t.name
+FROM tags t
+JOIN article_tags at ON t.id = at.tag_id
+WHERE at.article_id IN (sqlc.slice('article_ids'))
+ORDER BY at.article_id, t.name;
+
 -- name: GetFavoritesCount :one
 SELECT COUNT(*) FROM favorites WHERE article_id = ?;
 

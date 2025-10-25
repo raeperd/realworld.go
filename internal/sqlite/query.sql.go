@@ -328,6 +328,52 @@ func (q *Queries) GetArticleTagsByArticleID(ctx context.Context, articleID int64
 	return items, nil
 }
 
+const getArticleTagsByArticleIDs = `-- name: GetArticleTagsByArticleIDs :many
+SELECT at.article_id, t.name
+FROM tags t
+JOIN article_tags at ON t.id = at.tag_id
+WHERE at.article_id IN (/*SLICE:article_ids*/?)
+ORDER BY at.article_id, t.name
+`
+
+type GetArticleTagsByArticleIDsRow struct {
+	ArticleID int64
+	Name      string
+}
+
+func (q *Queries) GetArticleTagsByArticleIDs(ctx context.Context, articleIds []int64) ([]GetArticleTagsByArticleIDsRow, error) {
+	query := getArticleTagsByArticleIDs
+	var queryParams []interface{}
+	if len(articleIds) > 0 {
+		for _, v := range articleIds {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:article_ids*/?", strings.Repeat(",?", len(articleIds))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:article_ids*/?", "NULL", 1)
+	}
+	rows, err := q.db.QueryContext(ctx, query, queryParams...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetArticleTagsByArticleIDsRow
+	for rows.Next() {
+		var i GetArticleTagsByArticleIDsRow
+		if err := rows.Scan(&i.ArticleID, &i.Name); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getCommentByID = `-- name: GetCommentByID :one
 SELECT id, body, article_id, author_id, created_at, updated_at
 FROM comments
