@@ -1,9 +1,11 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"regexp"
 	"strings"
@@ -458,4 +460,298 @@ func handleDeleteArticlesSlug(db *sql.DB) http.HandlerFunc {
 		// Return 200 OK with no content
 		w.WriteHeader(http.StatusOK)
 	}
+}
+
+func handleGetArticles(db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// Parse query parameters
+		queryParams := r.URL.Query()
+		limit := int64(20) // default
+		offset := int64(0) // default
+		tag := queryParams.Get("tag")
+		author := queryParams.Get("author")
+		favorited := queryParams.Get("favorited")
+
+		if limitStr := queryParams.Get("limit"); limitStr != "" {
+			if parsedLimit, err := parseInt64(limitStr); err == nil && parsedLimit > 0 {
+				limit = parsedLimit
+			}
+		}
+
+		if offsetStr := queryParams.Get("offset"); offsetStr != "" {
+			if parsedOffset, err := parseInt64(offsetStr); err == nil && parsedOffset >= 0 {
+				offset = parsedOffset
+			}
+		}
+
+		queries := sqlite.New(db)
+
+		// Build WHERE clause for filtering
+		var articles []sqlite.ListArticlesRow
+		var totalCount int64
+		var err error
+
+		// If filters are provided, use raw SQL (sqlc doesn't handle dynamic WHERE well)
+		if tag != "" || author != "" || favorited != "" {
+			articles, totalCount, err = listArticlesWithFilters(r.Context(), db, tag, author, favorited, limit, offset)
+			if err != nil {
+				encodeErrorResponse(r.Context(), http.StatusInternalServerError, []error{err}, w)
+				return
+			}
+		} else {
+			// Use sqlc-generated query for simple case
+			articles, err = queries.ListArticles(r.Context(), sqlite.ListArticlesParams{
+				Limit:  limit,
+				Offset: offset,
+			})
+			if err != nil {
+				encodeErrorResponse(r.Context(), http.StatusInternalServerError, []error{err}, w)
+				return
+			}
+
+			// Get total count
+			totalCount, err = queries.CountArticles(r.Context())
+			if err != nil {
+				encodeErrorResponse(r.Context(), http.StatusInternalServerError, []error{err}, w)
+				return
+			}
+		}
+
+		// Check if user is authenticated
+		userID, authenticated := r.Context().Value(userIDKey).(int64)
+
+		// Build article IDs for batch queries
+		articleIDs := make([]int64, len(articles))
+		for i := range articles {
+			articleIDs[i] = articles[i].ID
+		}
+
+		// Get favorites counts for all articles
+		favoritesMap := make(map[int64]int64)
+		if len(articleIDs) > 0 {
+			favoritesCounts, err := queries.GetFavoritesByArticleIDs(r.Context(), articleIDs)
+			if err != nil {
+				encodeErrorResponse(r.Context(), http.StatusInternalServerError, []error{err}, w)
+				return
+			}
+			for _, fc := range favoritesCounts {
+				favoritesMap[fc.ArticleID] = fc.Count
+			}
+		}
+
+		// Get favorited status if authenticated
+		favoritedMap := make(map[int64]bool)
+		if authenticated && len(articleIDs) > 0 {
+			favoritedArticles, err := queries.CheckFavoritedByUser(r.Context(), sqlite.CheckFavoritedByUserParams{
+				UserID:     userID,
+				ArticleIds: articleIDs,
+			})
+			if err != nil {
+				encodeErrorResponse(r.Context(), http.StatusInternalServerError, []error{err}, w)
+				return
+			}
+			for _, articleID := range favoritedArticles {
+				favoritedMap[articleID] = true
+			}
+		}
+
+		// Get author IDs for following check
+		authorIDs := make([]int64, len(articles))
+		for i := range articles {
+			authorIDs[i] = articles[i].AuthorID
+		}
+
+		// Get following status if authenticated
+		followingMap := make(map[int64]bool)
+		if authenticated && len(authorIDs) > 0 {
+			followedAuthors, err := queries.GetFollowingByIDs(r.Context(), sqlite.GetFollowingByIDsParams{
+				FollowerID:  userID,
+				FollowedIds: authorIDs,
+			})
+			if err != nil {
+				encodeErrorResponse(r.Context(), http.StatusInternalServerError, []error{err}, w)
+				return
+			}
+			for _, followedID := range followedAuthors {
+				followingMap[followedID] = true
+			}
+		}
+
+		// Batch fetch tags for all articles
+		tagsMap := make(map[int64][]string)
+		if len(articleIDs) > 0 {
+			articleTags, err := queries.GetArticleTagsByArticleIDs(r.Context(), articleIDs)
+			if err != nil {
+				encodeErrorResponse(r.Context(), http.StatusInternalServerError, []error{err}, w)
+				return
+			}
+			for _, at := range articleTags {
+				tagsMap[at.ArticleID] = append(tagsMap[at.ArticleID], at.Name)
+			}
+		}
+
+		// Build response
+		responseArticles := make([]articleListResponse, len(articles))
+		for i := range articles {
+			// Get tags for this article from map
+			tags := tagsMap[articles[i].ID]
+
+			// Ensure tags is never null
+			if tags == nil {
+				tags = []string{}
+			}
+
+			responseArticles[i] = articleListResponse{
+				Slug:           articles[i].Slug,
+				Title:          articles[i].Title,
+				Description:    articles[i].Description,
+				TagList:        tags,
+				CreatedAt:      articles[i].CreatedAt.Format("2006-01-02T15:04:05.000Z"),
+				UpdatedAt:      articles[i].UpdatedAt.Format("2006-01-02T15:04:05.000Z"),
+				Favorited:      favoritedMap[articles[i].ID],
+				FavoritesCount: favoritesMap[articles[i].ID],
+				Author: authorProfile{
+					Username:  articles[i].AuthorUsername,
+					Bio:       articles[i].AuthorBio.String,
+					Image:     articles[i].AuthorImage.String,
+					Following: followingMap[articles[i].AuthorID],
+				},
+			}
+		}
+
+		encodeResponse(r.Context(), http.StatusOK, articlesResponseBody{
+			Articles:      responseArticles,
+			ArticlesCount: totalCount,
+		}, w)
+	}
+}
+
+func listArticlesWithFilters(ctx context.Context, db *sql.DB, tag, author, favorited string, limit, offset int64) ([]sqlite.ListArticlesRow, int64, error) {
+	// Build base query
+	query := `
+		SELECT DISTINCT
+			a.id,
+			a.slug,
+			a.title,
+			a.description,
+			a.created_at,
+			a.updated_at,
+			a.author_id,
+			u.username as author_username,
+			u.bio as author_bio,
+			u.image as author_image
+		FROM articles a
+		JOIN users u ON a.author_id = u.id`
+
+	countQuery := `
+		SELECT COUNT(DISTINCT a.id)
+		FROM articles a
+		JOIN users u ON a.author_id = u.id`
+
+	// Build WHERE clauses
+	var whereClauses []string
+	var args []any
+
+	if tag != "" {
+		query += `
+		JOIN article_tags at ON a.id = at.article_id
+		JOIN tags t ON at.tag_id = t.id`
+		countQuery += `
+		JOIN article_tags at ON a.id = at.article_id
+		JOIN tags t ON at.tag_id = t.id`
+		whereClauses = append(whereClauses, "t.name = ?")
+		args = append(args, tag)
+	}
+
+	if author != "" {
+		whereClauses = append(whereClauses, "u.username = ?")
+		args = append(args, author)
+	}
+
+	if favorited != "" {
+		query += `
+		JOIN favorites f ON a.id = f.article_id
+		JOIN users fu ON f.user_id = fu.id`
+		countQuery += `
+		JOIN favorites f ON a.id = f.article_id
+		JOIN users fu ON f.user_id = fu.id`
+		whereClauses = append(whereClauses, "fu.username = ?")
+		args = append(args, favorited)
+	}
+
+	if len(whereClauses) > 0 {
+		whereClause := " WHERE " + strings.Join(whereClauses, " AND ")
+		query += whereClause
+		countQuery += whereClause
+	}
+
+	query += `
+		ORDER BY a.created_at DESC
+		LIMIT ? OFFSET ?`
+	args = append(args, limit, offset)
+
+	// Get total count first
+	var totalCount int64
+	countArgs := args[:len(args)-2] // Remove limit and offset for count
+	err := db.QueryRowContext(ctx, countQuery, countArgs...).Scan(&totalCount)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	// Query articles
+	rows, err := db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer func() { _ = rows.Close() }()
+
+	var articles []sqlite.ListArticlesRow
+	for rows.Next() {
+		var article sqlite.ListArticlesRow
+		err := rows.Scan(
+			&article.ID,
+			&article.Slug,
+			&article.Title,
+			&article.Description,
+			&article.CreatedAt,
+			&article.UpdatedAt,
+			&article.AuthorID,
+			&article.AuthorUsername,
+			&article.AuthorBio,
+			&article.AuthorImage,
+		)
+		if err != nil {
+			return nil, 0, err
+		}
+		articles = append(articles, article)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
+	}
+
+	return articles, totalCount, nil
+}
+
+func parseInt64(s string) (int64, error) {
+	var result int64
+	_, err := fmt.Sscanf(s, "%d", &result)
+	return result, err
+}
+
+type articlesResponseBody struct {
+	Articles      []articleListResponse `json:"articles"`
+	ArticlesCount int64                 `json:"articlesCount"`
+}
+
+type articleListResponse struct {
+	Slug           string        `json:"slug"`
+	Title          string        `json:"title"`
+	Description    string        `json:"description"`
+	TagList        []string      `json:"tagList"`
+	CreatedAt      string        `json:"createdAt"`
+	UpdatedAt      string        `json:"updatedAt"`
+	Favorited      bool          `json:"favorited"`
+	FavoritesCount int64         `json:"favoritesCount"`
+	Author         authorProfile `json:"author"`
 }

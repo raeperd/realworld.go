@@ -26,6 +26,62 @@ func (q *Queries) AssociateArticleTag(ctx context.Context, arg AssociateArticleT
 	return err
 }
 
+const checkFavoritedByUser = `-- name: CheckFavoritedByUser :many
+SELECT article_id
+FROM favorites
+WHERE user_id = ? AND article_id IN (/*SLICE:article_ids*/?)
+`
+
+type CheckFavoritedByUserParams struct {
+	UserID     int64
+	ArticleIds []int64
+}
+
+func (q *Queries) CheckFavoritedByUser(ctx context.Context, arg CheckFavoritedByUserParams) ([]int64, error) {
+	query := checkFavoritedByUser
+	var queryParams []interface{}
+	queryParams = append(queryParams, arg.UserID)
+	if len(arg.ArticleIds) > 0 {
+		for _, v := range arg.ArticleIds {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:article_ids*/?", strings.Repeat(",?", len(arg.ArticleIds))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:article_ids*/?", "NULL", 1)
+	}
+	rows, err := q.db.QueryContext(ctx, query, queryParams...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []int64
+	for rows.Next() {
+		var article_id int64
+		if err := rows.Scan(&article_id); err != nil {
+			return nil, err
+		}
+		items = append(items, article_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const countArticles = `-- name: CountArticles :one
+SELECT COUNT(*) FROM articles
+`
+
+func (q *Queries) CountArticles(ctx context.Context) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countArticles)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createArticle = `-- name: CreateArticle :one
 INSERT INTO articles (slug, title, description, body, author_id)
 VALUES (?, ?, ?, ?, ?)
@@ -272,6 +328,52 @@ func (q *Queries) GetArticleTagsByArticleID(ctx context.Context, articleID int64
 	return items, nil
 }
 
+const getArticleTagsByArticleIDs = `-- name: GetArticleTagsByArticleIDs :many
+SELECT at.article_id, t.name
+FROM tags t
+JOIN article_tags at ON t.id = at.tag_id
+WHERE at.article_id IN (/*SLICE:article_ids*/?)
+ORDER BY at.article_id, t.name
+`
+
+type GetArticleTagsByArticleIDsRow struct {
+	ArticleID int64
+	Name      string
+}
+
+func (q *Queries) GetArticleTagsByArticleIDs(ctx context.Context, articleIds []int64) ([]GetArticleTagsByArticleIDsRow, error) {
+	query := getArticleTagsByArticleIDs
+	var queryParams []interface{}
+	if len(articleIds) > 0 {
+		for _, v := range articleIds {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:article_ids*/?", strings.Repeat(",?", len(articleIds))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:article_ids*/?", "NULL", 1)
+	}
+	rows, err := q.db.QueryContext(ctx, query, queryParams...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetArticleTagsByArticleIDsRow
+	for rows.Next() {
+		var i GetArticleTagsByArticleIDsRow
+		if err := rows.Scan(&i.ArticleID, &i.Name); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getCommentByID = `-- name: GetCommentByID :one
 SELECT id, body, article_id, author_id, created_at, updated_at
 FROM comments
@@ -379,6 +481,51 @@ func (q *Queries) GetCommentsByArticleSlug(ctx context.Context, slug string) ([]
 			&i.AuthorBio,
 			&i.AuthorImage,
 		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getFavoritesByArticleIDs = `-- name: GetFavoritesByArticleIDs :many
+SELECT article_id, COUNT(*) as count
+FROM favorites
+WHERE article_id IN (/*SLICE:article_ids*/?)
+GROUP BY article_id
+`
+
+type GetFavoritesByArticleIDsRow struct {
+	ArticleID int64
+	Count     int64
+}
+
+func (q *Queries) GetFavoritesByArticleIDs(ctx context.Context, articleIds []int64) ([]GetFavoritesByArticleIDsRow, error) {
+	query := getFavoritesByArticleIDs
+	var queryParams []interface{}
+	if len(articleIds) > 0 {
+		for _, v := range articleIds {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:article_ids*/?", strings.Repeat(",?", len(articleIds))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:article_ids*/?", "NULL", 1)
+	}
+	rows, err := q.db.QueryContext(ctx, query, queryParams...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetFavoritesByArticleIDsRow
+	for rows.Next() {
+		var i GetFavoritesByArticleIDsRow
+		if err := rows.Scan(&i.ArticleID, &i.Count); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -552,6 +699,76 @@ func (q *Queries) IsFollowing(ctx context.Context, arg IsFollowingParams) (int64
 	var column_1 int64
 	err := row.Scan(&column_1)
 	return column_1, err
+}
+
+const listArticles = `-- name: ListArticles :many
+SELECT
+    a.id,
+    a.slug,
+    a.title,
+    a.description,
+    a.created_at,
+    a.updated_at,
+    a.author_id,
+    u.username as author_username,
+    u.bio as author_bio,
+    u.image as author_image
+FROM articles a
+JOIN users u ON a.author_id = u.id
+ORDER BY a.created_at DESC
+LIMIT ? OFFSET ?
+`
+
+type ListArticlesParams struct {
+	Limit  int64
+	Offset int64
+}
+
+type ListArticlesRow struct {
+	ID             int64
+	Slug           string
+	Title          string
+	Description    string
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+	AuthorID       int64
+	AuthorUsername string
+	AuthorBio      sql.NullString
+	AuthorImage    sql.NullString
+}
+
+func (q *Queries) ListArticles(ctx context.Context, arg ListArticlesParams) ([]ListArticlesRow, error) {
+	rows, err := q.db.QueryContext(ctx, listArticles, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListArticlesRow
+	for rows.Next() {
+		var i ListArticlesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Slug,
+			&i.Title,
+			&i.Description,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.AuthorID,
+			&i.AuthorUsername,
+			&i.AuthorBio,
+			&i.AuthorImage,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const updateArticle = `-- name: UpdateArticle :one

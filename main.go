@@ -177,6 +177,7 @@ func route(log *slog.Logger, version string, db *sql.DB, jwtSecret string) http.
 	mux.Handle("POST /api/profiles/{username}/follow", authenticate(handlePostProfilesUsernameFollow(db), jwtSecret))
 	mux.Handle("DELETE /api/profiles/{username}/follow", authenticate(handleDeleteProfilesUsernameFollow(db), jwtSecret))
 	mux.HandleFunc("GET /api/tags", handleGetTags(db))
+	mux.Handle("GET /api/articles", authenticateOptional(handleGetArticles(db), jwtSecret))
 	mux.Handle("POST /api/articles", authenticate(handlePostArticles(db), jwtSecret))
 	mux.Handle("GET /api/articles/{slug}", authenticateOptional(handleGetArticlesSlug(db), jwtSecret))
 	mux.Handle("PUT /api/articles/{slug}", authenticate(handlePutArticlesSlug(db), jwtSecret))
