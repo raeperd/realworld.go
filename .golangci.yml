@@ -42,7 +42,7 @@ linters:
   exclusions:
     rules:
       - path: _test\.go
-        linters: [gosec]
+        linters: [gosec, dupl]
 
 formatters:
   enable:
