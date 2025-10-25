@@ -166,3 +166,30 @@ GROUP BY article_id;
 SELECT article_id
 FROM favorites
 WHERE user_id = ? AND article_id IN (sqlc.slice('article_ids'));
+
+-- name: ListArticlesFeed :many
+SELECT
+    a.id,
+    a.slug,
+    a.title,
+    a.description,
+    a.created_at,
+    a.updated_at,
+    a.author_id,
+    u.username as author_username,
+    u.bio as author_bio,
+    u.image as author_image
+FROM articles a
+JOIN users u ON a.author_id = u.id
+WHERE a.author_id IN (
+    SELECT followed_id FROM follows WHERE follower_id = ?
+)
+ORDER BY a.created_at DESC
+LIMIT ? OFFSET ?;
+
+-- name: CountArticlesFeed :one
+SELECT COUNT(*)
+FROM articles a
+WHERE a.author_id IN (
+    SELECT followed_id FROM follows WHERE follower_id = ?
+);
