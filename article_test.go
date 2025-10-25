@@ -175,6 +175,146 @@ func TestPostArticles_Unauthorized(t *testing.T) {
 	t.Cleanup(func() { _ = res.Body.Close() })
 }
 
+func TestGetArticlesSlug_Success(t *testing.T) {
+	t.Parallel()
+
+	// Setup: Create a user and article
+	unique := fmt.Sprintf("%d", time.Now().UnixNano())
+	username := "article_reader_" + unique
+	email := fmt.Sprintf("reader_%s@example.com", unique)
+
+	userReq := UserPostRequestBody{
+		Username: username,
+		Email:    email,
+		Password: "testpass123",
+	}
+	userRes := httpPostUsers(t, userReq)
+	test.Equal(t, http.StatusCreated, userRes.StatusCode)
+	t.Cleanup(func() { _ = userRes.Body.Close() })
+
+	var userResponse UserResponseBody
+	test.Nil(t, json.NewDecoder(userRes.Body).Decode(&userResponse))
+	token := userResponse.Token
+
+	// Create an article
+	articleReq := ArticlePostRequestBody{
+		Article: ArticlePostRequest{
+			Title:       "Test Article " + unique,
+			Description: "Test description",
+			Body:        "Test body content",
+			TagList:     []string{"test", "golang"},
+		},
+	}
+
+	createRes := httpPostArticles(t, articleReq, token)
+	test.Equal(t, http.StatusCreated, createRes.StatusCode)
+	t.Cleanup(func() { _ = createRes.Body.Close() })
+
+	var createResponse ArticleResponseBody
+	test.Nil(t, json.NewDecoder(createRes.Body).Decode(&createResponse))
+	slug := createResponse.Article.Slug
+
+	// Test: GET /api/articles/:slug without authentication
+	res := httpGetArticlesSlug(t, slug, "")
+	test.Equal(t, http.StatusOK, res.StatusCode)
+	t.Cleanup(func() { _ = res.Body.Close() })
+
+	// Verify response
+	var response ArticleResponseBody
+	test.Nil(t, json.NewDecoder(res.Body).Decode(&response))
+	test.Equal(t, slug, response.Article.Slug)
+	test.Equal(t, "Test Article "+unique, response.Article.Title)
+	test.Equal(t, "Test description", response.Article.Description)
+	test.Equal(t, "Test body content", response.Article.Body)
+	test.Equal(t, 2, len(response.Article.TagList))
+	test.Equal(t, false, response.Article.Favorited)
+	test.Equal(t, int64(0), response.Article.FavoritesCount)
+	test.Equal(t, username, response.Article.Author.Username)
+	test.Equal(t, false, response.Article.Author.Following)
+	test.NotNil(t, response.Article.CreatedAt)
+	test.NotNil(t, response.Article.UpdatedAt)
+}
+
+func TestGetArticlesSlug_NotFound(t *testing.T) {
+	t.Parallel()
+
+	// Test: GET /api/articles/:slug with non-existent slug
+	res := httpGetArticlesSlug(t, "nonexistent-article-slug", "")
+	test.Equal(t, http.StatusNotFound, res.StatusCode)
+	t.Cleanup(func() { _ = res.Body.Close() })
+}
+
+func TestGetArticlesSlug_Authenticated(t *testing.T) {
+	t.Parallel()
+
+	// Setup: Create two users - one author and one reader
+	unique := fmt.Sprintf("%d", time.Now().UnixNano())
+	authorUsername := "author_" + unique
+	authorEmail := fmt.Sprintf("author_%s@example.com", unique)
+
+	authorReq := UserPostRequestBody{
+		Username: authorUsername,
+		Email:    authorEmail,
+		Password: "testpass123",
+	}
+	authorRes := httpPostUsers(t, authorReq)
+	test.Equal(t, http.StatusCreated, authorRes.StatusCode)
+	t.Cleanup(func() { _ = authorRes.Body.Close() })
+
+	var authorResponse UserResponseBody
+	test.Nil(t, json.NewDecoder(authorRes.Body).Decode(&authorResponse))
+	authorToken := authorResponse.Token
+
+	// Create an article as the author
+	articleReq := ArticlePostRequestBody{
+		Article: ArticlePostRequest{
+			Title:       "Authenticated Test Article " + unique,
+			Description: "Test description",
+			Body:        "Test body content",
+			TagList:     []string{"auth", "test"},
+		},
+	}
+
+	createRes := httpPostArticles(t, articleReq, authorToken)
+	test.Equal(t, http.StatusCreated, createRes.StatusCode)
+	t.Cleanup(func() { _ = createRes.Body.Close() })
+
+	var createResponse ArticleResponseBody
+	test.Nil(t, json.NewDecoder(createRes.Body).Decode(&createResponse))
+	slug := createResponse.Article.Slug
+
+	// Create a reader user
+	readerUsername := "reader_" + unique
+	readerEmail := fmt.Sprintf("reader_%s@example.com", unique)
+
+	readerReq := UserPostRequestBody{
+		Username: readerUsername,
+		Email:    readerEmail,
+		Password: "testpass123",
+	}
+	readerRes := httpPostUsers(t, readerReq)
+	test.Equal(t, http.StatusCreated, readerRes.StatusCode)
+	t.Cleanup(func() { _ = readerRes.Body.Close() })
+
+	var readerResponse UserResponseBody
+	test.Nil(t, json.NewDecoder(readerRes.Body).Decode(&readerResponse))
+	readerToken := readerResponse.Token
+
+	// Test: GET /api/articles/:slug as authenticated reader
+	res := httpGetArticlesSlug(t, slug, readerToken)
+	test.Equal(t, http.StatusOK, res.StatusCode)
+	t.Cleanup(func() { _ = res.Body.Close() })
+
+	// Verify response - authenticated user should get correct favorited/following status
+	var response ArticleResponseBody
+	test.Nil(t, json.NewDecoder(res.Body).Decode(&response))
+	test.Equal(t, slug, response.Article.Slug)
+	test.Equal(t, "Authenticated Test Article "+unique, response.Article.Title)
+	test.Equal(t, false, response.Article.Favorited)        // Reader hasn't favorited
+	test.Equal(t, false, response.Article.Author.Following) // Reader doesn't follow author
+	test.Equal(t, authorUsername, response.Article.Author.Username)
+}
+
 func httpPostArticles(t *testing.T, reqBody ArticlePostRequestBody, token string) *http.Response {
 	t.Helper()
 
@@ -184,6 +324,21 @@ func httpPostArticles(t *testing.T, reqBody ArticlePostRequestBody, token string
 	req, err := http.NewRequest(http.MethodPost, endpoint+"/api/articles", bytes.NewReader(body))
 	test.Nil(t, err)
 	req.Header.Set("Content-Type", "application/json")
+	if token != "" {
+		req.Header.Set("Authorization", "Token "+token)
+	}
+
+	res, err := http.DefaultClient.Do(req)
+	test.Nil(t, err)
+
+	return res
+}
+
+func httpGetArticlesSlug(t *testing.T, slug string, token string) *http.Response {
+	t.Helper()
+
+	req, err := http.NewRequest(http.MethodGet, endpoint+"/api/articles/"+slug, nil)
+	test.Nil(t, err)
 	if token != "" {
 		req.Header.Set("Authorization", "Token "+token)
 	}
