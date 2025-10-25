@@ -119,3 +119,12 @@ JOIN articles a ON c.article_id = a.id
 JOIN users u ON c.author_id = u.id
 WHERE a.slug = ?
 ORDER BY c.created_at DESC;
+
+-- name: GetCommentByID :one
+SELECT id, body, article_id, author_id, created_at, updated_at
+FROM comments
+WHERE id = ?;
+
+-- name: DeleteComment :exec
+DELETE FROM comments
+WHERE id = ?;

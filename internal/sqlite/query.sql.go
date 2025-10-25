@@ -146,6 +146,16 @@ func (q *Queries) DeleteArticle(ctx context.Context, id int64) error {
 	return err
 }
 
+const deleteComment = `-- name: DeleteComment :exec
+DELETE FROM comments
+WHERE id = ?
+`
+
+func (q *Queries) DeleteComment(ctx context.Context, id int64) error {
+	_, err := q.db.ExecContext(ctx, deleteComment, id)
+	return err
+}
+
 const deleteFollow = `-- name: DeleteFollow :exec
 DELETE FROM follows WHERE follower_id = ? AND followed_id = ?
 `
@@ -260,6 +270,26 @@ func (q *Queries) GetArticleTagsByArticleID(ctx context.Context, articleID int64
 		return nil, err
 	}
 	return items, nil
+}
+
+const getCommentByID = `-- name: GetCommentByID :one
+SELECT id, body, article_id, author_id, created_at, updated_at
+FROM comments
+WHERE id = ?
+`
+
+func (q *Queries) GetCommentByID(ctx context.Context, id int64) (Comment, error) {
+	row := q.db.QueryRowContext(ctx, getCommentByID, id)
+	var i Comment
+	err := row.Scan(
+		&i.ID,
+		&i.Body,
+		&i.ArticleID,
+		&i.AuthorID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
 }
 
 const getCommentWithAuthor = `-- name: GetCommentWithAuthor :one
