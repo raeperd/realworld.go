@@ -83,6 +83,10 @@ SELECT COUNT(*) FROM favorites WHERE article_id = ?;
 -- name: IsFavorited :one
 SELECT EXISTS(SELECT 1 FROM favorites WHERE user_id = ? AND article_id = ?);
 
+-- name: CreateFavorite :exec
+INSERT INTO favorites (user_id, article_id) VALUES (?, ?)
+ON CONFLICT (user_id, article_id) DO NOTHING;
+
 -- name: UpdateArticle :one
 UPDATE articles
 SET

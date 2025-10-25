@@ -159,6 +159,21 @@ func (q *Queries) CreateComment(ctx context.Context, arg CreateCommentParams) (C
 	return i, err
 }
 
+const createFavorite = `-- name: CreateFavorite :exec
+INSERT INTO favorites (user_id, article_id) VALUES (?, ?)
+ON CONFLICT (user_id, article_id) DO NOTHING
+`
+
+type CreateFavoriteParams struct {
+	UserID    int64
+	ArticleID int64
+}
+
+func (q *Queries) CreateFavorite(ctx context.Context, arg CreateFavoriteParams) error {
+	_, err := q.db.ExecContext(ctx, createFavorite, arg.UserID, arg.ArticleID)
+	return err
+}
+
 const createFollow = `-- name: CreateFollow :exec
 INSERT INTO follows (follower_id, followed_id) VALUES (?, ?)
 ON CONFLICT (follower_id, followed_id) DO NOTHING
