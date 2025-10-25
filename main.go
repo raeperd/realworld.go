@@ -181,6 +181,7 @@ func route(log *slog.Logger, version string, db *sql.DB, jwtSecret string) http.
 	mux.Handle("GET /api/articles/{slug}", authenticateOptional(handleGetArticlesSlug(db), jwtSecret))
 	mux.Handle("PUT /api/articles/{slug}", authenticate(handlePutArticlesSlug(db), jwtSecret))
 	mux.Handle("DELETE /api/articles/{slug}", authenticate(handleDeleteArticlesSlug(db), jwtSecret))
+	mux.Handle("POST /api/articles/{slug}/comments", authenticate(handlePostArticlesSlugComments(db), jwtSecret))
 
 	handler := cors(mux)
 	handler = accesslog(handler, log)

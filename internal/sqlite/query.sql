@@ -84,3 +84,18 @@ RETURNING *;
 
 -- name: DeleteArticle :exec
 DELETE FROM articles WHERE id = ?;
+
+-- name: CreateComment :one
+INSERT INTO comments (body, article_id, author_id)
+VALUES (?, ?, ?)
+RETURNING *;
+
+-- name: GetCommentWithAuthor :one
+SELECT
+    c.*,
+    u.username as author_username,
+    u.bio as author_bio,
+    u.image as author_image
+FROM comments c
+JOIN users u ON c.author_id = u.id
+WHERE c.id = ?;

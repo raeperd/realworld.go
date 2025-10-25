@@ -170,7 +170,7 @@ func encodeResponse[T responseBody](ctx context.Context, status int, body T, w h
 }
 
 type responseBody interface {
-	userPostResponseBody | errorResponseBody | profileGetResponseWrapper | tagsResponseBody | articleResponseBody
+	userPostResponseBody | errorResponseBody | profileGetResponseWrapper | tagsResponseBody | articleResponseBody | commentResponseBody
 }
 
 type userPostRequestBody struct {
