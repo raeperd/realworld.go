@@ -1,7 +1,7 @@
 # Implementation Plan: DELETE /api/articles/:slug
 
 **Status**: [ ] Not Started / [x] In Progress / [ ] Completed
-**PR**: (will be added after PR creation)
+**PR**: #29
 
 ## Context
 
