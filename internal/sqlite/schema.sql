@@ -80,3 +80,26 @@ CREATE TABLE favorites (
 );
 
 CREATE INDEX idx_favorites_article_id ON favorites(article_id);
+
+CREATE TABLE comments (
+    id INTEGER PRIMARY KEY,
+    body text NOT NULL,
+    article_id INTEGER NOT NULL,
+    author_id INTEGER NOT NULL,
+    created_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (article_id) REFERENCES articles(id) ON DELETE CASCADE,
+    FOREIGN KEY (author_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE TRIGGER update_comments_updated_at
+    AFTER UPDATE OF body ON comments
+    FOR EACH ROW
+BEGIN
+    UPDATE comments
+    SET updated_at = DATETIME('now')
+    WHERE rowid = NEW.rowid;
+END;
+
+CREATE INDEX idx_comments_article_id ON comments(article_id);
+CREATE INDEX idx_comments_author_id ON comments(author_id);

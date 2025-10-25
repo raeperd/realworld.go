@@ -61,6 +61,32 @@ func (q *Queries) CreateArticle(ctx context.Context, arg CreateArticleParams) (A
 	return i, err
 }
 
+const createComment = `-- name: CreateComment :one
+INSERT INTO comments (body, article_id, author_id)
+VALUES (?, ?, ?)
+RETURNING id, body, article_id, author_id, created_at, updated_at
+`
+
+type CreateCommentParams struct {
+	Body      string
+	ArticleID int64
+	AuthorID  int64
+}
+
+func (q *Queries) CreateComment(ctx context.Context, arg CreateCommentParams) (Comment, error) {
+	row := q.db.QueryRowContext(ctx, createComment, arg.Body, arg.ArticleID, arg.AuthorID)
+	var i Comment
+	err := row.Scan(
+		&i.ID,
+		&i.Body,
+		&i.ArticleID,
+		&i.AuthorID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const createFollow = `-- name: CreateFollow :exec
 INSERT INTO follows (follower_id, followed_id) VALUES (?, ?)
 ON CONFLICT (follower_id, followed_id) DO NOTHING
@@ -233,6 +259,46 @@ func (q *Queries) GetArticleTagsByArticleID(ctx context.Context, articleID int64
 		return nil, err
 	}
 	return items, nil
+}
+
+const getCommentWithAuthor = `-- name: GetCommentWithAuthor :one
+SELECT
+    c.id, c.body, c.article_id, c.author_id, c.created_at, c.updated_at,
+    u.username as author_username,
+    u.bio as author_bio,
+    u.image as author_image
+FROM comments c
+JOIN users u ON c.author_id = u.id
+WHERE c.id = ?
+`
+
+type GetCommentWithAuthorRow struct {
+	ID             int64
+	Body           string
+	ArticleID      int64
+	AuthorID       int64
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+	AuthorUsername string
+	AuthorBio      sql.NullString
+	AuthorImage    sql.NullString
+}
+
+func (q *Queries) GetCommentWithAuthor(ctx context.Context, id int64) (GetCommentWithAuthorRow, error) {
+	row := q.db.QueryRowContext(ctx, getCommentWithAuthor, id)
+	var i GetCommentWithAuthorRow
+	err := row.Scan(
+		&i.ID,
+		&i.Body,
+		&i.ArticleID,
+		&i.AuthorID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.AuthorUsername,
+		&i.AuthorBio,
+		&i.AuthorImage,
+	)
+	return i, err
 }
 
 const getFavoritesCount = `-- name: GetFavoritesCount :one

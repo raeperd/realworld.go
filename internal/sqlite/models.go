@@ -25,6 +25,15 @@ type ArticleTag struct {
 	TagID     int64
 }
 
+type Comment struct {
+	ID        int64
+	Body      string
+	ArticleID int64
+	AuthorID  int64
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
 type Favorite struct {
 	UserID    int64
 	ArticleID int64
