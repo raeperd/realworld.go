@@ -1408,3 +1408,71 @@ func httpGetArticlesFeed(t *testing.T, queryParams string, token string) *http.R
 
 	return res
 }
+
+func TestPostArticlesSlugFavorite_Success(t *testing.T) {
+	t.Parallel()
+
+	// Setup: Create a user and article
+	unique := fmt.Sprintf("%d", time.Now().UnixNano())
+	username := "favorite_user_" + unique
+	email := fmt.Sprintf("favorite_%s@example.com", unique)
+
+	userReq := UserPostRequestBody{
+		Username: username,
+		Email:    email,
+		Password: "testpass123",
+	}
+	userRes := httpPostUsers(t, userReq)
+	test.Equal(t, http.StatusCreated, userRes.StatusCode)
+	t.Cleanup(func() { _ = userRes.Body.Close() })
+
+	var userResponse UserResponseBody
+	test.Nil(t, json.NewDecoder(userRes.Body).Decode(&userResponse))
+	token := userResponse.Token
+
+	// Create an article
+	articleReq := ArticlePostRequestBody{
+		Article: ArticlePostRequest{
+			Title:       "Article to Favorite " + unique,
+			Description: "Test description",
+			Body:        "Test body content",
+			TagList:     []string{"test"},
+		},
+	}
+
+	createRes := httpPostArticles(t, articleReq, token)
+	test.Equal(t, http.StatusCreated, createRes.StatusCode)
+	t.Cleanup(func() { _ = createRes.Body.Close() })
+
+	var createResponse ArticleResponseBody
+	test.Nil(t, json.NewDecoder(createRes.Body).Decode(&createResponse))
+	slug := createResponse.Article.Slug
+
+	// Test: Favorite the article
+	res := httpPostArticlesSlugFavorite(t, slug, token)
+	test.Equal(t, http.StatusOK, res.StatusCode)
+	t.Cleanup(func() { _ = res.Body.Close() })
+
+	// Verify response
+	var response ArticleResponseBody
+	test.Nil(t, json.NewDecoder(res.Body).Decode(&response))
+	test.Equal(t, slug, response.Article.Slug)
+	test.Equal(t, true, response.Article.Favorited)
+	test.Equal(t, int64(1), response.Article.FavoritesCount)
+	test.Equal(t, username, response.Article.Author.Username)
+}
+
+func httpPostArticlesSlugFavorite(t *testing.T, slug string, token string) *http.Response {
+	t.Helper()
+
+	req, err := http.NewRequest(http.MethodPost, endpoint+"/api/articles/"+slug+"/favorite", nil)
+	test.Nil(t, err)
+	if token != "" {
+		req.Header.Set("Authorization", "Token "+token)
+	}
+
+	res, err := http.DefaultClient.Do(req)
+	test.Nil(t, err)
+
+	return res
+}
