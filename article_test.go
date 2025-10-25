@@ -1184,3 +1184,109 @@ func TestGetArticles_FilterByAuthor(t *testing.T) {
 	}
 	test.Equal(t, 1, user2Count)
 }
+
+func TestGetArticlesFeed_Success(t *testing.T) {
+	t.Parallel()
+
+	// Setup: Create two users - follower and followed
+	unique := fmt.Sprintf("%d", time.Now().UnixNano())
+
+	// Create follower user
+	followerUsername := "follower_" + unique
+	followerEmail := fmt.Sprintf("follower_%s@example.com", unique)
+	followerReq := UserPostRequestBody{
+		Username: followerUsername,
+		Email:    followerEmail,
+		Password: "testpass123",
+	}
+	followerRes := httpPostUsers(t, followerReq)
+	test.Equal(t, http.StatusCreated, followerRes.StatusCode)
+	t.Cleanup(func() { _ = followerRes.Body.Close() })
+
+	var followerResponse UserResponseBody
+	test.Nil(t, json.NewDecoder(followerRes.Body).Decode(&followerResponse))
+	followerToken := followerResponse.Token
+
+	// Create followed user
+	followedUsername := "followed_" + unique
+	followedEmail := fmt.Sprintf("followed_%s@example.com", unique)
+	followedReq := UserPostRequestBody{
+		Username: followedUsername,
+		Email:    followedEmail,
+		Password: "testpass123",
+	}
+	followedRes := httpPostUsers(t, followedReq)
+	test.Equal(t, http.StatusCreated, followedRes.StatusCode)
+	t.Cleanup(func() { _ = followedRes.Body.Close() })
+
+	var followedResponse UserResponseBody
+	test.Nil(t, json.NewDecoder(followedRes.Body).Decode(&followedResponse))
+	followedToken := followedResponse.Token
+
+	// Follower follows the followed user
+	followRes := httpPostProfileFollow(t, followedUsername, followerToken)
+	test.Equal(t, http.StatusOK, followRes.StatusCode)
+	t.Cleanup(func() { _ = followRes.Body.Close() })
+
+	// Followed user creates an article
+	articleReq := ArticlePostRequestBody{
+		Article: ArticlePostRequest{
+			Title:       "Article in Feed " + unique,
+			Description: "This should appear in follower's feed",
+			Body:        "Content here",
+			TagList:     []string{"feed", "test"},
+		},
+	}
+	articleRes := httpPostArticles(t, articleReq, followedToken)
+	test.Equal(t, http.StatusCreated, articleRes.StatusCode)
+	t.Cleanup(func() { _ = articleRes.Body.Close() })
+
+	var articleResponse ArticleResponseBody
+	test.Nil(t, json.NewDecoder(articleRes.Body).Decode(&articleResponse))
+	expectedSlug := articleResponse.Article.Slug
+
+	// Test: GET /api/articles/feed with follower's token
+	res := httpGetArticlesFeed(t, "", followerToken)
+	test.Equal(t, http.StatusOK, res.StatusCode)
+	t.Cleanup(func() { _ = res.Body.Close() })
+
+	// Verify response structure and content
+	var response ArticlesResponseBody
+	test.Nil(t, json.NewDecoder(res.Body).Decode(&response))
+	test.True(t, response.ArticlesCount > 0)
+	test.True(t, len(response.Articles) > 0)
+
+	// Verify the article from followed user is in the feed
+	found := false
+	for _, article := range response.Articles {
+		if article.Slug == expectedSlug {
+			found = true
+			test.Equal(t, "Article in Feed "+unique, article.Title)
+			test.Equal(t, "This should appear in follower's feed", article.Description)
+			test.Equal(t, followedUsername, article.Author.Username)
+			test.Equal(t, true, article.Author.Following) // Should always be true in feed
+			break
+		}
+	}
+	test.True(t, found)
+}
+
+func httpGetArticlesFeed(t *testing.T, queryParams string, token string) *http.Response {
+	t.Helper()
+
+	url := endpoint + "/api/articles/feed"
+	if queryParams != "" {
+		url += "?" + queryParams
+	}
+
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	test.Nil(t, err)
+	if token != "" {
+		req.Header.Set("Authorization", "Token "+token)
+	}
+
+	res, err := http.DefaultClient.Do(req)
+	test.Nil(t, err)
+
+	return res
+}
