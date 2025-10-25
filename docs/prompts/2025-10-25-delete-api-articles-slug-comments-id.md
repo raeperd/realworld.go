@@ -1,6 +1,6 @@
 # Implementation Plan: DELETE /api/articles/:slug/comments/:id
 
-**Status**: [x] In Progress
+**Status**: [x] Completed
 **PR**: #32
 
 ## Context
