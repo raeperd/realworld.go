@@ -383,3 +383,99 @@ type AuthorProfile struct {
 	Image     string `json:"image"`
 	Following bool   `json:"following"`
 }
+
+func TestPutArticlesSlug_Success(t *testing.T) {
+	t.Parallel()
+
+	// Setup: Create a user and article
+	unique := fmt.Sprintf("%d", time.Now().UnixNano())
+	username := "article_updater_" + unique
+	email := fmt.Sprintf("updater_%s@example.com", unique)
+
+	userReq := UserPostRequestBody{
+		Username: username,
+		Email:    email,
+		Password: "testpass123",
+	}
+	userRes := httpPostUsers(t, userReq)
+	test.Equal(t, http.StatusCreated, userRes.StatusCode)
+	t.Cleanup(func() { _ = userRes.Body.Close() })
+
+	var userResponse UserResponseBody
+	test.Nil(t, json.NewDecoder(userRes.Body).Decode(&userResponse))
+	token := userResponse.Token
+
+	// Create an article
+	articleReq := ArticlePostRequestBody{
+		Article: ArticlePostRequest{
+			Title:       "Original Title " + unique,
+			Description: "Original description",
+			Body:        "Original body content",
+			TagList:     []string{"original"},
+		},
+	}
+
+	createRes := httpPostArticles(t, articleReq, token)
+	test.Equal(t, http.StatusCreated, createRes.StatusCode)
+	t.Cleanup(func() { _ = createRes.Body.Close() })
+
+	var createResponse ArticleResponseBody
+	test.Nil(t, json.NewDecoder(createRes.Body).Decode(&createResponse))
+	originalSlug := createResponse.Article.Slug
+
+	// Test: Update article with new title (should regenerate slug)
+	updateReq := ArticlePutRequestBody{
+		Article: ArticlePutRequest{
+			Title:       stringPtr("Updated Title " + unique),
+			Description: stringPtr("Updated description"),
+			Body:        stringPtr("Updated body content"),
+		},
+	}
+
+	res := httpPutArticlesSlug(t, originalSlug, updateReq, token)
+	test.Equal(t, http.StatusOK, res.StatusCode)
+	t.Cleanup(func() { _ = res.Body.Close() })
+
+	// Verify response
+	var response ArticleResponseBody
+	test.Nil(t, json.NewDecoder(res.Body).Decode(&response))
+	test.NotEqual(t, originalSlug, response.Article.Slug) // Slug should change
+	test.Equal(t, "Updated Title "+unique, response.Article.Title)
+	test.Equal(t, "Updated description", response.Article.Description)
+	test.Equal(t, "Updated body content", response.Article.Body)
+	test.Equal(t, username, response.Article.Author.Username)
+	test.NotNil(t, response.Article.UpdatedAt)
+}
+
+func httpPutArticlesSlug(t *testing.T, slug string, reqBody ArticlePutRequestBody, token string) *http.Response {
+	t.Helper()
+
+	body, err := json.Marshal(reqBody)
+	test.Nil(t, err)
+
+	req, err := http.NewRequest(http.MethodPut, endpoint+"/api/articles/"+slug, bytes.NewReader(body))
+	test.Nil(t, err)
+	req.Header.Set("Content-Type", "application/json")
+	if token != "" {
+		req.Header.Set("Authorization", "Token "+token)
+	}
+
+	res, err := http.DefaultClient.Do(req)
+	test.Nil(t, err)
+
+	return res
+}
+
+type ArticlePutRequestBody struct {
+	Article ArticlePutRequest `json:"article"`
+}
+
+type ArticlePutRequest struct {
+	Title       *string `json:"title,omitempty"`
+	Description *string `json:"description,omitempty"`
+	Body        *string `json:"body,omitempty"`
+}
+
+func stringPtr(s string) *string {
+	return &s
+}
