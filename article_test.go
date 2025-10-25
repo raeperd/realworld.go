@@ -1572,3 +1572,177 @@ func TestPostArticlesSlugFavorite_Idempotent(t *testing.T) {
 	test.Equal(t, true, response2.Article.Favorited)
 	test.Equal(t, int64(1), response2.Article.FavoritesCount) // Count should still be 1
 }
+
+func TestDeleteArticlesSlugFavorite_Success(t *testing.T) {
+	t.Parallel()
+
+	// Setup: Create a user and article
+	unique := fmt.Sprintf("%d", time.Now().UnixNano())
+	username := "unfavorite_user_" + unique
+	email := fmt.Sprintf("unfavorite_%s@example.com", unique)
+
+	userReq := UserPostRequestBody{
+		Username: username,
+		Email:    email,
+		Password: "testpass123",
+	}
+	userRes := httpPostUsers(t, userReq)
+	test.Equal(t, http.StatusCreated, userRes.StatusCode)
+	t.Cleanup(func() { _ = userRes.Body.Close() })
+
+	var userResponse UserResponseBody
+	test.Nil(t, json.NewDecoder(userRes.Body).Decode(&userResponse))
+	token := userResponse.Token
+
+	// Create an article
+	articleReq := ArticlePostRequestBody{
+		Article: ArticlePostRequest{
+			Title:       "Article to Unfavorite " + unique,
+			Description: "Test description",
+			Body:        "Test body content",
+			TagList:     []string{"test"},
+		},
+	}
+
+	createRes := httpPostArticles(t, articleReq, token)
+	test.Equal(t, http.StatusCreated, createRes.StatusCode)
+	t.Cleanup(func() { _ = createRes.Body.Close() })
+
+	var createResponse ArticleResponseBody
+	test.Nil(t, json.NewDecoder(createRes.Body).Decode(&createResponse))
+	slug := createResponse.Article.Slug
+
+	// First, favorite the article
+	favRes := httpPostArticlesSlugFavorite(t, slug, token)
+	test.Equal(t, http.StatusOK, favRes.StatusCode)
+	t.Cleanup(func() { _ = favRes.Body.Close() })
+
+	// Test: Unfavorite the article
+	res := httpDeleteArticlesSlugFavorite(t, slug, token)
+	test.Equal(t, http.StatusOK, res.StatusCode)
+	t.Cleanup(func() { _ = res.Body.Close() })
+
+	// Verify response
+	var response ArticleResponseBody
+	test.Nil(t, json.NewDecoder(res.Body).Decode(&response))
+	test.Equal(t, slug, response.Article.Slug)
+	test.Equal(t, false, response.Article.Favorited)
+	test.Equal(t, int64(0), response.Article.FavoritesCount)
+	test.Equal(t, username, response.Article.Author.Username)
+}
+
+func httpDeleteArticlesSlugFavorite(t *testing.T, slug string, token string) *http.Response {
+	t.Helper()
+
+	req, err := http.NewRequest(http.MethodDelete, endpoint+"/api/articles/"+slug+"/favorite", nil)
+	test.Nil(t, err)
+	if token != "" {
+		req.Header.Set("Authorization", "Token "+token)
+	}
+
+	res, err := http.DefaultClient.Do(req)
+	test.Nil(t, err)
+
+	return res
+}
+
+func TestDeleteArticlesSlugFavorite_NotFound(t *testing.T) {
+	t.Parallel()
+
+	// Setup: Create a user
+	unique := fmt.Sprintf("%d", time.Now().UnixNano())
+	username := "user_" + unique
+	email := fmt.Sprintf("user_%s@example.com", unique)
+
+	userReq := UserPostRequestBody{
+		Username: username,
+		Email:    email,
+		Password: "testpass123",
+	}
+	userRes := httpPostUsers(t, userReq)
+	test.Equal(t, http.StatusCreated, userRes.StatusCode)
+	t.Cleanup(func() { _ = userRes.Body.Close() })
+
+	var userResponse UserResponseBody
+	test.Nil(t, json.NewDecoder(userRes.Body).Decode(&userResponse))
+	token := userResponse.Token
+
+	// Test: Try to unfavorite non-existent article
+	res := httpDeleteArticlesSlugFavorite(t, "nonexistent-slug", token)
+	test.Equal(t, http.StatusNotFound, res.StatusCode)
+	t.Cleanup(func() { _ = res.Body.Close() })
+}
+
+func TestDeleteArticlesSlugFavorite_Unauthorized(t *testing.T) {
+	t.Parallel()
+
+	// Test: Try to unfavorite without token
+	res := httpDeleteArticlesSlugFavorite(t, "some-slug", "")
+	test.Equal(t, http.StatusUnauthorized, res.StatusCode)
+	t.Cleanup(func() { _ = res.Body.Close() })
+}
+
+func TestDeleteArticlesSlugFavorite_Idempotent(t *testing.T) {
+	t.Parallel()
+
+	// Setup: Create a user and article
+	unique := fmt.Sprintf("%d", time.Now().UnixNano())
+	username := "idempotent_unfav_user_" + unique
+	email := fmt.Sprintf("idempotent_unfav_%s@example.com", unique)
+
+	userReq := UserPostRequestBody{
+		Username: username,
+		Email:    email,
+		Password: "testpass123",
+	}
+	userRes := httpPostUsers(t, userReq)
+	test.Equal(t, http.StatusCreated, userRes.StatusCode)
+	t.Cleanup(func() { _ = userRes.Body.Close() })
+
+	var userResponse UserResponseBody
+	test.Nil(t, json.NewDecoder(userRes.Body).Decode(&userResponse))
+	token := userResponse.Token
+
+	// Create an article
+	articleReq := ArticlePostRequestBody{
+		Article: ArticlePostRequest{
+			Title:       "Article for Idempotent Unfavorite Test " + unique,
+			Description: "Test description",
+			Body:        "Test body content",
+			TagList:     []string{"test"},
+		},
+	}
+
+	createRes := httpPostArticles(t, articleReq, token)
+	test.Equal(t, http.StatusCreated, createRes.StatusCode)
+	t.Cleanup(func() { _ = createRes.Body.Close() })
+
+	var createResponse ArticleResponseBody
+	test.Nil(t, json.NewDecoder(createRes.Body).Decode(&createResponse))
+	slug := createResponse.Article.Slug
+
+	// Favorite the article first
+	favRes := httpPostArticlesSlugFavorite(t, slug, token)
+	test.Equal(t, http.StatusOK, favRes.StatusCode)
+	t.Cleanup(func() { _ = favRes.Body.Close() })
+
+	// Test: Unfavorite the article first time
+	res1 := httpDeleteArticlesSlugFavorite(t, slug, token)
+	test.Equal(t, http.StatusOK, res1.StatusCode)
+	t.Cleanup(func() { _ = res1.Body.Close() })
+
+	var response1 ArticleResponseBody
+	test.Nil(t, json.NewDecoder(res1.Body).Decode(&response1))
+	test.Equal(t, false, response1.Article.Favorited)
+	test.Equal(t, int64(0), response1.Article.FavoritesCount)
+
+	// Test: Unfavorite the same article again (should be idempotent)
+	res2 := httpDeleteArticlesSlugFavorite(t, slug, token)
+	test.Equal(t, http.StatusOK, res2.StatusCode)
+	t.Cleanup(func() { _ = res2.Body.Close() })
+
+	var response2 ArticleResponseBody
+	test.Nil(t, json.NewDecoder(res2.Body).Decode(&response2))
+	test.Equal(t, false, response2.Article.Favorited)
+	test.Equal(t, int64(0), response2.Article.FavoritesCount) // Count should still be 0
+}
