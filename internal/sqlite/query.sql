@@ -81,3 +81,6 @@ SET
     body = COALESCE(sqlc.narg('body'), body)
 WHERE id = sqlc.arg('id')
 RETURNING *;
+
+-- name: DeleteArticle :exec
+DELETE FROM articles WHERE id = ?;
