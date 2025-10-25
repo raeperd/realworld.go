@@ -128,3 +128,34 @@ WHERE id = ?;
 -- name: DeleteComment :exec
 DELETE FROM comments
 WHERE id = ?;
+
+-- name: ListArticles :many
+SELECT
+    a.id,
+    a.slug,
+    a.title,
+    a.description,
+    a.created_at,
+    a.updated_at,
+    a.author_id,
+    u.username as author_username,
+    u.bio as author_bio,
+    u.image as author_image
+FROM articles a
+JOIN users u ON a.author_id = u.id
+ORDER BY a.created_at DESC
+LIMIT ? OFFSET ?;
+
+-- name: CountArticles :one
+SELECT COUNT(*) FROM articles;
+
+-- name: GetFavoritesByArticleIDs :many
+SELECT article_id, COUNT(*) as count
+FROM favorites
+WHERE article_id IN (sqlc.slice('article_ids'))
+GROUP BY article_id;
+
+-- name: CheckFavoritedByUser :many
+SELECT article_id
+FROM favorites
+WHERE user_id = ? AND article_id IN (sqlc.slice('article_ids'));
