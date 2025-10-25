@@ -797,3 +797,136 @@ func TestDeleteArticlesSlug_Forbidden(t *testing.T) {
 	test.Equal(t, http.StatusForbidden, res.StatusCode)
 	t.Cleanup(func() { _ = res.Body.Close() })
 }
+
+func TestGetArticles_Success(t *testing.T) {
+	t.Parallel()
+
+	// Setup: Create a user and multiple articles
+	unique := fmt.Sprintf("%d", time.Now().UnixNano())
+	username := "article_lister_" + unique
+	email := fmt.Sprintf("lister_%s@example.com", unique)
+
+	userReq := UserPostRequestBody{
+		Username: username,
+		Email:    email,
+		Password: "testpass123",
+	}
+	userRes := httpPostUsers(t, userReq)
+	test.Equal(t, http.StatusCreated, userRes.StatusCode)
+	t.Cleanup(func() { _ = userRes.Body.Close() })
+
+	var userResponse UserResponseBody
+	test.Nil(t, json.NewDecoder(userRes.Body).Decode(&userResponse))
+	token := userResponse.Token
+
+	// Create first article
+	article1Req := ArticlePostRequestBody{
+		Article: ArticlePostRequest{
+			Title:       "First Article " + unique,
+			Description: "First description",
+			Body:        "First body",
+			TagList:     []string{"golang", "test"},
+		},
+	}
+	article1Res := httpPostArticles(t, article1Req, token)
+	test.Equal(t, http.StatusCreated, article1Res.StatusCode)
+	t.Cleanup(func() { _ = article1Res.Body.Close() })
+
+	// Small delay to ensure different created_at timestamps
+	time.Sleep(10 * time.Millisecond)
+
+	// Create second article
+	article2Req := ArticlePostRequestBody{
+		Article: ArticlePostRequest{
+			Title:       "Second Article " + unique,
+			Description: "Second description",
+			Body:        "Second body",
+			TagList:     []string{"rust", "tutorial"},
+		},
+	}
+	article2Res := httpPostArticles(t, article2Req, token)
+	test.Equal(t, http.StatusCreated, article2Res.StatusCode)
+	t.Cleanup(func() { _ = article2Res.Body.Close() })
+
+	// Test: GET /api/articles without authentication
+	res := httpGetArticles(t, "", "")
+	test.Equal(t, http.StatusOK, res.StatusCode)
+	t.Cleanup(func() { _ = res.Body.Close() })
+
+	// Verify response structure
+	var response ArticlesResponseBody
+	test.Nil(t, json.NewDecoder(res.Body).Decode(&response))
+
+	// Should have at least 2 articles (our created ones)
+	test.True(t, len(response.Articles) >= 2)
+	test.True(t, response.ArticlesCount >= 2)
+
+	// Find our articles in the response (they should be the most recent)
+	var firstArticle, secondArticle *ArticleListResponse
+	for i := range response.Articles {
+		if response.Articles[i].Title == "First Article "+unique {
+			firstArticle = &response.Articles[i]
+		}
+		if response.Articles[i].Title == "Second Article "+unique {
+			secondArticle = &response.Articles[i]
+		}
+	}
+
+	test.NotNil(t, firstArticle)
+	test.NotNil(t, secondArticle)
+
+	// Verify first article structure (should NOT include body field)
+	test.Equal(t, "first-article-"+unique, firstArticle.Slug)
+	test.Equal(t, "First Article "+unique, firstArticle.Title)
+	test.Equal(t, "First description", firstArticle.Description)
+	test.Equal(t, 2, len(firstArticle.TagList))
+	test.Equal(t, false, firstArticle.Favorited)
+	test.Equal(t, int64(0), firstArticle.FavoritesCount)
+	test.Equal(t, username, firstArticle.Author.Username)
+	test.NotNil(t, firstArticle.CreatedAt)
+	test.NotNil(t, firstArticle.UpdatedAt)
+
+	// Verify second article
+	test.Equal(t, "second-article-"+unique, secondArticle.Slug)
+	test.Equal(t, "Second Article "+unique, secondArticle.Title)
+	test.Equal(t, "Second description", secondArticle.Description)
+	test.Equal(t, 2, len(secondArticle.TagList))
+}
+
+func httpGetArticles(t *testing.T, queryParams string, token string) *http.Response {
+	t.Helper()
+
+	url := endpoint + "/api/articles"
+	if queryParams != "" {
+		url += "?" + queryParams
+	}
+
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	test.Nil(t, err)
+	if token != "" {
+		req.Header.Set("Authorization", "Token "+token)
+	}
+
+	res, err := http.DefaultClient.Do(req)
+	test.Nil(t, err)
+
+	return res
+}
+
+type ArticlesResponseBody struct {
+	Articles      []ArticleListResponse `json:"articles"`
+	ArticlesCount int64                 `json:"articlesCount"`
+}
+
+type ArticleListResponse struct {
+	Slug           string        `json:"slug"`
+	Title          string        `json:"title"`
+	Description    string        `json:"description"`
+	TagList        []string      `json:"tagList"`
+	CreatedAt      string        `json:"createdAt"`
+	UpdatedAt      string        `json:"updatedAt"`
+	Favorited      bool          `json:"favorited"`
+	FavoritesCount int64         `json:"favoritesCount"`
+	Author         AuthorProfile `json:"author"`
+	// Note: Body field is intentionally omitted (per spec update 2024/08/16)
+}
