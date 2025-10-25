@@ -886,6 +886,7 @@ type articleListResponse struct {
 	Author         authorProfile `json:"author"`
 }
 
+//nolint:dupl // Favorite and unfavorite handlers have intentional structural similarity
 func handlePostArticlesSlugFavorite(db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		slug := r.PathValue("slug")
@@ -984,6 +985,7 @@ func handlePostArticlesSlugFavorite(db *sql.DB) http.HandlerFunc {
 	}
 }
 
+//nolint:dupl // Favorite and unfavorite handlers have intentional structural similarity
 func handleDeleteArticlesSlugFavorite(db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		slug := r.PathValue("slug")
