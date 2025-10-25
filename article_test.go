@@ -636,8 +636,8 @@ func TestPutArticlesSlug_PartialUpdate(t *testing.T) {
 	// Verify response - slug and title should remain unchanged
 	var response ArticleResponseBody
 	test.Nil(t, json.NewDecoder(res.Body).Decode(&response))
-	test.Equal(t, slug, response.Article.Slug) // Slug unchanged
-	test.Equal(t, "Original Title "+unique, response.Article.Title) // Title unchanged
+	test.Equal(t, slug, response.Article.Slug)                          // Slug unchanged
+	test.Equal(t, "Original Title "+unique, response.Article.Title)     // Title unchanged
 	test.Equal(t, "Original description", response.Article.Description) // Description unchanged
-	test.Equal(t, "Updated body only", response.Article.Body) // Body updated
+	test.Equal(t, "Updated body only", response.Article.Body)           // Body updated
 }
