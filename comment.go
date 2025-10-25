@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 
 	"github.com/raeperd/realworld.go/internal/sqlite"
@@ -231,4 +232,71 @@ func handleGetArticlesSlugComments(db *sql.DB) http.HandlerFunc {
 
 type commentsResponseBody struct {
 	Comments []commentPayload `json:"comments"`
+}
+
+func handleDeleteArticlesSlugCommentsID(db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		slug := r.PathValue("slug")
+		commentIDStr := r.PathValue("id")
+
+		// Parse comment ID from path
+		var commentID int64
+		if _, err := fmt.Sscanf(commentIDStr, "%d", &commentID); err != nil {
+			encodeErrorResponse(r.Context(), http.StatusBadRequest, []error{errors.New("invalid comment ID")}, w)
+			return
+		}
+
+		// Get authenticated user ID from context
+		userID, ok := r.Context().Value(userIDKey).(int64)
+		if !ok {
+			encodeErrorResponse(r.Context(), http.StatusUnauthorized, []error{errors.New("unauthorized")}, w)
+			return
+		}
+
+		queries := sqlite.New(db)
+
+		// Verify article exists
+		article, err := queries.GetArticleBySlug(r.Context(), slug)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				encodeErrorResponse(r.Context(), http.StatusNotFound, []error{errors.New("article not found")}, w)
+				return
+			}
+			encodeErrorResponse(r.Context(), http.StatusInternalServerError, []error{err}, w)
+			return
+		}
+
+		// Get comment by ID
+		comment, err := queries.GetCommentByID(r.Context(), commentID)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				encodeErrorResponse(r.Context(), http.StatusNotFound, []error{errors.New("comment not found")}, w)
+				return
+			}
+			encodeErrorResponse(r.Context(), http.StatusInternalServerError, []error{err}, w)
+			return
+		}
+
+		// Verify comment belongs to the article (security check)
+		if comment.ArticleID != article.ID {
+			encodeErrorResponse(r.Context(), http.StatusNotFound, []error{errors.New("comment not found")}, w)
+			return
+		}
+
+		// Verify user is the comment author (authorization check)
+		if comment.AuthorID != userID {
+			encodeErrorResponse(r.Context(), http.StatusForbidden, []error{errors.New("not authorized to delete this comment")}, w)
+			return
+		}
+
+		// Delete the comment
+		err = queries.DeleteComment(r.Context(), commentID)
+		if err != nil {
+			encodeErrorResponse(r.Context(), http.StatusInternalServerError, []error{err}, w)
+			return
+		}
+
+		// Return 204 No Content
+		w.WriteHeader(http.StatusNoContent)
+	}
 }
