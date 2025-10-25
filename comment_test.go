@@ -436,3 +436,244 @@ func TestGetArticlesSlugComments_WithFollowing(t *testing.T) {
 	test.Equal(t, authorUsername, response.Comments[0].Author.Username)
 	test.Equal(t, true, response.Comments[0].Author.Following)
 }
+
+func TestDeleteArticlesSlugCommentsID_Success(t *testing.T) {
+	t.Parallel()
+
+	// Setup: Create a user and get token
+	unique := fmt.Sprintf("%d", time.Now().UnixNano())
+	username := "delete_comment_author_" + unique
+	email := fmt.Sprintf("delete_comment_%s@example.com", unique)
+
+	userReq := UserPostRequestBody{
+		Username: username,
+		Email:    email,
+		Password: "testpass123",
+	}
+	userRes := httpPostUsers(t, userReq)
+	test.Equal(t, http.StatusCreated, userRes.StatusCode)
+	t.Cleanup(func() { _ = userRes.Body.Close() })
+
+	var userResponse UserResponseBody
+	test.Nil(t, json.NewDecoder(userRes.Body).Decode(&userResponse))
+	token := userResponse.Token
+
+	// Create an article
+	articleReq := ArticlePostRequestBody{
+		Article: ArticlePostRequest{
+			Title:       "Article for Delete Comment " + unique,
+			Description: "Test article",
+			Body:        "Article body",
+			TagList:     []string{"test"},
+		},
+	}
+
+	articleRes := httpPostArticles(t, articleReq, token)
+	test.Equal(t, http.StatusCreated, articleRes.StatusCode)
+	t.Cleanup(func() { _ = articleRes.Body.Close() })
+
+	var articleResponse ArticleResponseBody
+	test.Nil(t, json.NewDecoder(articleRes.Body).Decode(&articleResponse))
+	slug := articleResponse.Article.Slug
+
+	// Create a comment
+	commentReq := CommentPostRequestBody{
+		Comment: CommentPostRequest{
+			Body: "Comment to be deleted",
+		},
+	}
+
+	commentRes := httpPostArticlesSlugComments(t, slug, commentReq, token)
+	test.Equal(t, http.StatusCreated, commentRes.StatusCode)
+	t.Cleanup(func() { _ = commentRes.Body.Close() })
+
+	var commentResponse CommentResponseBody
+	test.Nil(t, json.NewDecoder(commentRes.Body).Decode(&commentResponse))
+	commentID := commentResponse.Comment.ID
+
+	// Test: DELETE /api/articles/:slug/comments/:id
+	res := httpDeleteArticlesSlugCommentsID(t, slug, commentID, token)
+	test.Equal(t, http.StatusNoContent, res.StatusCode)
+	t.Cleanup(func() { _ = res.Body.Close() })
+
+	// Verify comment no longer exists by getting all comments
+	getRes := httpGetArticlesSlugComments(t, slug, "")
+	test.Equal(t, http.StatusOK, getRes.StatusCode)
+	t.Cleanup(func() { _ = getRes.Body.Close() })
+
+	var getResponse CommentsResponseBody
+	test.Nil(t, json.NewDecoder(getRes.Body).Decode(&getResponse))
+	test.Equal(t, 0, len(getResponse.Comments))
+}
+
+func httpDeleteArticlesSlugCommentsID(t *testing.T, slug string, commentID int64, token string) *http.Response {
+	t.Helper()
+
+	req, err := http.NewRequest(http.MethodDelete, fmt.Sprintf("%s/api/articles/%s/comments/%d", endpoint, slug, commentID), nil)
+	test.Nil(t, err)
+	if token != "" {
+		req.Header.Set("Authorization", "Token "+token)
+	}
+
+	res, err := http.DefaultClient.Do(req)
+	test.Nil(t, err)
+
+	return res
+}
+
+func TestDeleteArticlesSlugCommentsID_Unauthorized(t *testing.T) {
+	t.Parallel()
+
+	// Try to delete without auth token
+	res := httpDeleteArticlesSlugCommentsID(t, "some-article", 1, "")
+	test.Equal(t, http.StatusUnauthorized, res.StatusCode)
+	t.Cleanup(func() { _ = res.Body.Close() })
+}
+
+func TestDeleteArticlesSlugCommentsID_ArticleNotFound(t *testing.T) {
+	t.Parallel()
+
+	// Setup: Create a user and get token
+	unique := fmt.Sprintf("%d", time.Now().UnixNano())
+	username := "delete_notfound_" + unique
+	email := fmt.Sprintf("delete_notfound_%s@example.com", unique)
+
+	userReq := UserPostRequestBody{
+		Username: username,
+		Email:    email,
+		Password: "testpass123",
+	}
+	userRes := httpPostUsers(t, userReq)
+	test.Equal(t, http.StatusCreated, userRes.StatusCode)
+	t.Cleanup(func() { _ = userRes.Body.Close() })
+
+	var userResponse UserResponseBody
+	test.Nil(t, json.NewDecoder(userRes.Body).Decode(&userResponse))
+	token := userResponse.Token
+
+	// Try to delete comment from non-existent article
+	res := httpDeleteArticlesSlugCommentsID(t, "nonexistent-article", 1, token)
+	test.Equal(t, http.StatusNotFound, res.StatusCode)
+	t.Cleanup(func() { _ = res.Body.Close() })
+}
+
+func TestDeleteArticlesSlugCommentsID_CommentNotFound(t *testing.T) {
+	t.Parallel()
+
+	// Setup: Create a user and get token
+	unique := fmt.Sprintf("%d", time.Now().UnixNano())
+	username := "delete_comment_notfound_" + unique
+	email := fmt.Sprintf("delete_comment_notfound_%s@example.com", unique)
+
+	userReq := UserPostRequestBody{
+		Username: username,
+		Email:    email,
+		Password: "testpass123",
+	}
+	userRes := httpPostUsers(t, userReq)
+	test.Equal(t, http.StatusCreated, userRes.StatusCode)
+	t.Cleanup(func() { _ = userRes.Body.Close() })
+
+	var userResponse UserResponseBody
+	test.Nil(t, json.NewDecoder(userRes.Body).Decode(&userResponse))
+	token := userResponse.Token
+
+	// Create an article
+	articleReq := ArticlePostRequestBody{
+		Article: ArticlePostRequest{
+			Title:       "Article for Comment Not Found " + unique,
+			Description: "Test article",
+			Body:        "Article body",
+			TagList:     []string{"test"},
+		},
+	}
+
+	articleRes := httpPostArticles(t, articleReq, token)
+	test.Equal(t, http.StatusCreated, articleRes.StatusCode)
+	t.Cleanup(func() { _ = articleRes.Body.Close() })
+
+	var articleResponse ArticleResponseBody
+	test.Nil(t, json.NewDecoder(articleRes.Body).Decode(&articleResponse))
+	slug := articleResponse.Article.Slug
+
+	// Try to delete non-existent comment
+	res := httpDeleteArticlesSlugCommentsID(t, slug, 999999, token)
+	test.Equal(t, http.StatusNotFound, res.StatusCode)
+	t.Cleanup(func() { _ = res.Body.Close() })
+}
+
+func TestDeleteArticlesSlugCommentsID_Forbidden(t *testing.T) {
+	t.Parallel()
+
+	// Setup: Create author user
+	unique := fmt.Sprintf("%d", time.Now().UnixNano())
+	authorUsername := "comment_author_forbidden_" + unique
+	authorEmail := fmt.Sprintf("author_forbidden_%s@example.com", unique)
+
+	authorUserReq := UserPostRequestBody{
+		Username: authorUsername,
+		Email:    authorEmail,
+		Password: "testpass123",
+	}
+	authorRes := httpPostUsers(t, authorUserReq)
+	test.Equal(t, http.StatusCreated, authorRes.StatusCode)
+	t.Cleanup(func() { _ = authorRes.Body.Close() })
+
+	var authorResponse UserResponseBody
+	test.Nil(t, json.NewDecoder(authorRes.Body).Decode(&authorResponse))
+	authorToken := authorResponse.Token
+
+	// Create other user
+	otherUsername := "other_user_" + unique
+	otherEmail := fmt.Sprintf("other_%s@example.com", unique)
+
+	otherUserReq := UserPostRequestBody{
+		Username: otherUsername,
+		Email:    otherEmail,
+		Password: "testpass123",
+	}
+	otherRes := httpPostUsers(t, otherUserReq)
+	test.Equal(t, http.StatusCreated, otherRes.StatusCode)
+	t.Cleanup(func() { _ = otherRes.Body.Close() })
+
+	var otherResponse UserResponseBody
+	test.Nil(t, json.NewDecoder(otherRes.Body).Decode(&otherResponse))
+	otherToken := otherResponse.Token
+
+	// Author creates article and comment
+	articleReq := ArticlePostRequestBody{
+		Article: ArticlePostRequest{
+			Title:       "Article for Forbidden Test " + unique,
+			Description: "Test article",
+			Body:        "Article body",
+			TagList:     []string{"test"},
+		},
+	}
+
+	articleRes := httpPostArticles(t, articleReq, authorToken)
+	test.Equal(t, http.StatusCreated, articleRes.StatusCode)
+	t.Cleanup(func() { _ = articleRes.Body.Close() })
+
+	var articleResponse ArticleResponseBody
+	test.Nil(t, json.NewDecoder(articleRes.Body).Decode(&articleResponse))
+	slug := articleResponse.Article.Slug
+
+	commentReq := CommentPostRequestBody{
+		Comment: CommentPostRequest{
+			Body: "Author's comment",
+		},
+	}
+
+	commentRes := httpPostArticlesSlugComments(t, slug, commentReq, authorToken)
+	test.Equal(t, http.StatusCreated, commentRes.StatusCode)
+	t.Cleanup(func() { _ = commentRes.Body.Close() })
+
+	var commentResponse CommentResponseBody
+	test.Nil(t, json.NewDecoder(commentRes.Body).Decode(&commentResponse))
+	commentID := commentResponse.Comment.ID
+
+	// Try to delete comment as other user (should be forbidden)
+	res := httpDeleteArticlesSlugCommentsID(t, slug, commentID, otherToken)
+	test.Equal(t, http.StatusForbidden, res.StatusCode)
+	t.Cleanup(func() { _ = res.Body.Close() })
+}
