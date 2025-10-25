@@ -283,3 +283,137 @@ func handleGetArticlesSlug(db *sql.DB) http.HandlerFunc {
 		}, w)
 	}
 }
+
+func handlePutArticlesSlug(db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		slug := r.PathValue("slug")
+
+		var request articlePutRequestBody
+		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		defer func() { _ = r.Body.Close() }()
+
+		// Get authenticated user ID from context
+		userID, ok := r.Context().Value(userIDKey).(int64)
+		if !ok {
+			encodeErrorResponse(r.Context(), http.StatusUnauthorized, []error{errors.New("unauthorized")}, w)
+			return
+		}
+
+		tx, err := db.BeginTx(r.Context(), nil)
+		if err != nil {
+			encodeErrorResponse(r.Context(), http.StatusInternalServerError, []error{err}, w)
+			return
+		}
+		defer func() { _ = tx.Rollback() }()
+
+		queries := sqlite.New(tx)
+
+		// Get existing article by slug
+		existingArticle, err := queries.GetArticleBySlug(r.Context(), slug)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				encodeErrorResponse(r.Context(), http.StatusNotFound, []error{errors.New("article not found")}, w)
+				return
+			}
+			encodeErrorResponse(r.Context(), http.StatusInternalServerError, []error{err}, w)
+			return
+		}
+
+		// Check if user is the author
+		if existingArticle.AuthorID != userID {
+			encodeErrorResponse(r.Context(), http.StatusForbidden, []error{errors.New("not authorized to update this article")}, w)
+			return
+		}
+
+		// Prepare update parameters
+		updateParams := sqlite.UpdateArticleParams{
+			ID: existingArticle.ID,
+		}
+
+		// Handle slug regeneration if title is updated
+		if request.Article.Title != nil {
+			newSlug := generateSlug(*request.Article.Title)
+			updateParams.Slug = sql.NullString{String: newSlug, Valid: true}
+			updateParams.Title = sql.NullString{String: *request.Article.Title, Valid: true}
+		}
+
+		if request.Article.Description != nil {
+			updateParams.Description = sql.NullString{String: *request.Article.Description, Valid: true}
+		}
+
+		if request.Article.Body != nil {
+			updateParams.Body = sql.NullString{String: *request.Article.Body, Valid: true}
+		}
+
+		// Update article
+		article, err := queries.UpdateArticle(r.Context(), updateParams)
+		if err != nil {
+			encodeErrorResponse(r.Context(), http.StatusInternalServerError, []error{err}, w)
+			return
+		}
+
+		// Get author details
+		author, err := queries.GetUserByID(r.Context(), userID)
+		if err != nil {
+			encodeErrorResponse(r.Context(), http.StatusInternalServerError, []error{err}, w)
+			return
+		}
+
+		// Get tags for response
+		tags, err := queries.GetArticleTagsByArticleID(r.Context(), article.ID)
+		if err != nil {
+			encodeErrorResponse(r.Context(), http.StatusInternalServerError, []error{err}, w)
+			return
+		}
+
+		// Get favorites count
+		favoritesCount, err := queries.GetFavoritesCount(r.Context(), article.ID)
+		if err != nil {
+			encodeErrorResponse(r.Context(), http.StatusInternalServerError, []error{err}, w)
+			return
+		}
+
+		if err := tx.Commit(); err != nil {
+			encodeErrorResponse(r.Context(), http.StatusInternalServerError, []error{err}, w)
+			return
+		}
+
+		// Ensure tags is never null in JSON response
+		if tags == nil {
+			tags = []string{}
+		}
+
+		encodeResponse(r.Context(), http.StatusOK, articleResponseBody{
+			Article: articleResponse{
+				Slug:           article.Slug,
+				Title:          article.Title,
+				Description:    article.Description,
+				Body:           article.Body,
+				TagList:        tags,
+				CreatedAt:      article.CreatedAt.Format("2006-01-02T15:04:05.000Z"),
+				UpdatedAt:      article.UpdatedAt.Format("2006-01-02T15:04:05.000Z"),
+				Favorited:      false,
+				FavoritesCount: favoritesCount,
+				Author: authorProfile{
+					Username:  author.Username,
+					Bio:       author.Bio.String,
+					Image:     author.Image.String,
+					Following: false, // Author viewing their own article
+				},
+			},
+		}, w)
+	}
+}
+
+type articlePutRequestBody struct {
+	Article articlePutRequest `json:"article"`
+}
+
+type articlePutRequest struct {
+	Title       *string `json:"title,omitempty"`
+	Description *string `json:"description,omitempty"`
+	Body        *string `json:"body,omitempty"`
+}
