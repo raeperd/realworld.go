@@ -641,3 +641,68 @@ func TestPutArticlesSlug_PartialUpdate(t *testing.T) {
 	test.Equal(t, "Original description", response.Article.Description) // Description unchanged
 	test.Equal(t, "Updated body only", response.Article.Body)           // Body updated
 }
+
+func TestDeleteArticlesSlug_Success(t *testing.T) {
+	t.Parallel()
+
+	// Setup: Create a user and article
+	unique := fmt.Sprintf("%d", time.Now().UnixNano())
+	username := "article_deleter_" + unique
+	email := fmt.Sprintf("deleter_%s@example.com", unique)
+
+	userReq := UserPostRequestBody{
+		Username: username,
+		Email:    email,
+		Password: "testpass123",
+	}
+	userRes := httpPostUsers(t, userReq)
+	test.Equal(t, http.StatusCreated, userRes.StatusCode)
+	t.Cleanup(func() { _ = userRes.Body.Close() })
+
+	var userResponse UserResponseBody
+	test.Nil(t, json.NewDecoder(userRes.Body).Decode(&userResponse))
+	token := userResponse.Token
+
+	// Create an article
+	articleReq := ArticlePostRequestBody{
+		Article: ArticlePostRequest{
+			Title:       "Article to Delete " + unique,
+			Description: "Will be deleted",
+			Body:        "Body content",
+			TagList:     []string{"delete", "test"},
+		},
+	}
+
+	createRes := httpPostArticles(t, articleReq, token)
+	test.Equal(t, http.StatusCreated, createRes.StatusCode)
+	t.Cleanup(func() { _ = createRes.Body.Close() })
+
+	var createResponse ArticleResponseBody
+	test.Nil(t, json.NewDecoder(createRes.Body).Decode(&createResponse))
+	slug := createResponse.Article.Slug
+
+	// Test: Delete the article
+	res := httpDeleteArticlesSlug(t, slug, token)
+	test.Equal(t, http.StatusOK, res.StatusCode)
+	t.Cleanup(func() { _ = res.Body.Close() })
+
+	// Verify article is deleted by trying to get it
+	getRes := httpGetArticlesSlug(t, slug, "")
+	test.Equal(t, http.StatusNotFound, getRes.StatusCode)
+	t.Cleanup(func() { _ = getRes.Body.Close() })
+}
+
+func httpDeleteArticlesSlug(t *testing.T, slug string, token string) *http.Response {
+	t.Helper()
+
+	req, err := http.NewRequest(http.MethodDelete, endpoint+"/api/articles/"+slug, nil)
+	test.Nil(t, err)
+	if token != "" {
+		req.Header.Set("Authorization", "Token "+token)
+	}
+
+	res, err := http.DefaultClient.Do(req)
+	test.Nil(t, err)
+
+	return res
+}
