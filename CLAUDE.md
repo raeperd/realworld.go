@@ -236,3 +236,4 @@ When making changes that affect CI:
 - Check lint issues: `make lint`  
 - Verify Docker build: `make docker`
 - do not merge pr before explicitly requested
+- u need to be revied before merging PR
