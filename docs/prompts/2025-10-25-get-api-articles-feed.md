@@ -2,10 +2,10 @@
 
 ## Status & Links
 
-- **Status**: [x] In Progress
+- **Status**: [x] Completed
 - **PR**: https://github.com/raeperd/realworld.go/pull/34
 - **Created**: 2025-10-25
-- **Completed**: -
+- **Completed**: 2025-10-25
 
 ## Context
 
