@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"regexp"
 	"strings"
@@ -458,4 +459,165 @@ func handleDeleteArticlesSlug(db *sql.DB) http.HandlerFunc {
 		// Return 200 OK with no content
 		w.WriteHeader(http.StatusOK)
 	}
+}
+
+func handleGetArticles(db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// Parse query parameters
+		queryParams := r.URL.Query()
+		limit := int64(20) // default
+		offset := int64(0) // default
+
+		if limitStr := queryParams.Get("limit"); limitStr != "" {
+			if parsedLimit, err := parseInt64(limitStr); err == nil && parsedLimit > 0 {
+				limit = parsedLimit
+			}
+		}
+
+		if offsetStr := queryParams.Get("offset"); offsetStr != "" {
+			if parsedOffset, err := parseInt64(offsetStr); err == nil && parsedOffset >= 0 {
+				offset = parsedOffset
+			}
+		}
+
+		queries := sqlite.New(db)
+
+		// Get articles
+		articles, err := queries.ListArticles(r.Context(), sqlite.ListArticlesParams{
+			Limit:  limit,
+			Offset: offset,
+		})
+		if err != nil {
+			encodeErrorResponse(r.Context(), http.StatusInternalServerError, []error{err}, w)
+			return
+		}
+
+		// Get total count
+		totalCount, err := queries.CountArticles(r.Context())
+		if err != nil {
+			encodeErrorResponse(r.Context(), http.StatusInternalServerError, []error{err}, w)
+			return
+		}
+
+		// Check if user is authenticated
+		userID, authenticated := r.Context().Value(userIDKey).(int64)
+
+		// Build article IDs for batch queries
+		articleIDs := make([]int64, len(articles))
+		for i, article := range articles {
+			articleIDs[i] = article.ID
+		}
+
+		// Get favorites counts for all articles
+		favoritesMap := make(map[int64]int64)
+		if len(articleIDs) > 0 {
+			favoritesCounts, err := queries.GetFavoritesByArticleIDs(r.Context(), articleIDs)
+			if err != nil {
+				encodeErrorResponse(r.Context(), http.StatusInternalServerError, []error{err}, w)
+				return
+			}
+			for _, fc := range favoritesCounts {
+				favoritesMap[fc.ArticleID] = fc.Count
+			}
+		}
+
+		// Get favorited status if authenticated
+		favoritedMap := make(map[int64]bool)
+		if authenticated && len(articleIDs) > 0 {
+			favoritedArticles, err := queries.CheckFavoritedByUser(r.Context(), sqlite.CheckFavoritedByUserParams{
+				UserID:     userID,
+				ArticleIds: articleIDs,
+			})
+			if err != nil {
+				encodeErrorResponse(r.Context(), http.StatusInternalServerError, []error{err}, w)
+				return
+			}
+			for _, articleID := range favoritedArticles {
+				favoritedMap[articleID] = true
+			}
+		}
+
+		// Get author IDs for following check
+		authorIDs := make([]int64, len(articles))
+		for i, article := range articles {
+			authorIDs[i] = article.AuthorID
+		}
+
+		// Get following status if authenticated
+		followingMap := make(map[int64]bool)
+		if authenticated && len(authorIDs) > 0 {
+			followedAuthors, err := queries.GetFollowingByIDs(r.Context(), sqlite.GetFollowingByIDsParams{
+				FollowerID:  userID,
+				FollowedIds: authorIDs,
+			})
+			if err != nil {
+				encodeErrorResponse(r.Context(), http.StatusInternalServerError, []error{err}, w)
+				return
+			}
+			for _, followedID := range followedAuthors {
+				followingMap[followedID] = true
+			}
+		}
+
+		// Build response
+		responseArticles := make([]articleListResponse, len(articles))
+		for i, article := range articles {
+			// Get tags for this article
+			tags, err := queries.GetArticleTagsByArticleID(r.Context(), article.ID)
+			if err != nil {
+				encodeErrorResponse(r.Context(), http.StatusInternalServerError, []error{err}, w)
+				return
+			}
+
+			// Ensure tags is never null
+			if tags == nil {
+				tags = []string{}
+			}
+
+			responseArticles[i] = articleListResponse{
+				Slug:           article.Slug,
+				Title:          article.Title,
+				Description:    article.Description,
+				TagList:        tags,
+				CreatedAt:      article.CreatedAt.Format("2006-01-02T15:04:05.000Z"),
+				UpdatedAt:      article.UpdatedAt.Format("2006-01-02T15:04:05.000Z"),
+				Favorited:      favoritedMap[article.ID],
+				FavoritesCount: favoritesMap[article.ID],
+				Author: authorProfile{
+					Username:  article.AuthorUsername,
+					Bio:       article.AuthorBio.String,
+					Image:     article.AuthorImage.String,
+					Following: followingMap[article.AuthorID],
+				},
+			}
+		}
+
+		encodeResponse(r.Context(), http.StatusOK, articlesResponseBody{
+			Articles:      responseArticles,
+			ArticlesCount: totalCount,
+		}, w)
+	}
+}
+
+func parseInt64(s string) (int64, error) {
+	var result int64
+	_, err := fmt.Sscanf(s, "%d", &result)
+	return result, err
+}
+
+type articlesResponseBody struct {
+	Articles      []articleListResponse `json:"articles"`
+	ArticlesCount int64                 `json:"articlesCount"`
+}
+
+type articleListResponse struct {
+	Slug           string        `json:"slug"`
+	Title          string        `json:"title"`
+	Description    string        `json:"description"`
+	TagList        []string      `json:"tagList"`
+	CreatedAt      string        `json:"createdAt"`
+	UpdatedAt      string        `json:"updatedAt"`
+	Favorited      bool          `json:"favorited"`
+	FavoritesCount int64         `json:"favoritesCount"`
+	Author         authorProfile `json:"author"`
 }
