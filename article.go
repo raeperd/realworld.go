@@ -897,7 +897,14 @@ func handlePostArticlesSlugFavorite(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		queries := sqlite.New(db)
+		tx, err := db.BeginTx(r.Context(), nil)
+		if err != nil {
+			encodeErrorResponse(r.Context(), http.StatusInternalServerError, []error{err}, w)
+			return
+		}
+		defer func() { _ = tx.Rollback() }()
+
+		queries := sqlite.New(tx)
 
 		// Get article by slug to verify it exists
 		article, err := queries.GetArticleBySlug(r.Context(), slug)
@@ -949,6 +956,11 @@ func handlePostArticlesSlugFavorite(db *sql.DB) http.HandlerFunc {
 			return
 		}
 		following := followingInt > 0
+
+		if err := tx.Commit(); err != nil {
+			encodeErrorResponse(r.Context(), http.StatusInternalServerError, []error{err}, w)
+			return
+		}
 
 		encodeResponse(r.Context(), http.StatusOK, articleResponseBody{
 			Article: articleResponse{
