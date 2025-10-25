@@ -1,6 +1,6 @@
 # Implementation Plan: PUT /api/articles/:slug
 
-**Status**: [ ] Not Started / [x] In Progress / [ ] Completed
+**Status**: [x] Completed
 **PR**: #28
 
 ## Context
