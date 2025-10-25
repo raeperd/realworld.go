@@ -2,8 +2,8 @@
 
 ## Status & Links
 
-- [ ] In Progress
-- PR: (to be created)
+- [x] In Progress
+- PR: https://github.com/raeperd/realworld.go/pull/36
 
 ## Context
 
