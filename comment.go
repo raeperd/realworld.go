@@ -137,3 +137,67 @@ type commentPayload struct {
 	Body      string        `json:"body"`
 	Author    authorProfile `json:"author"`
 }
+
+func handleGetArticlesSlugComments(db *sql.DB, jwtSecret string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// Get article slug from URL path
+		slug := r.PathValue("slug")
+
+		// Get optional user ID from context (for following status)
+		userID, _ := r.Context().Value(userIDKey).(int64)
+
+		queries := sqlite.New(db)
+
+		// Get comments by article slug
+		comments, err := queries.GetCommentsByArticleSlug(r.Context(), slug)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				encodeErrorResponse(r.Context(), http.StatusNotFound, []error{errors.New("article not found")}, w)
+				return
+			}
+			encodeErrorResponse(r.Context(), http.StatusInternalServerError, []error{err}, w)
+			return
+		}
+
+		// Build response with comments
+		commentPayloads := make([]commentPayload, len(comments))
+		for i, comment := range comments {
+			// Check if current user is following the comment author
+			following := false
+			if userID != 0 && userID != comment.AuthorID {
+				isFollowingInt, err := queries.IsFollowing(r.Context(), sqlite.IsFollowingParams{
+					FollowerID: userID,
+					FollowedID: comment.AuthorID,
+				})
+				if err != nil {
+					encodeErrorResponse(r.Context(), http.StatusInternalServerError, []error{err}, w)
+					return
+				}
+				following = isFollowingInt == 1
+			}
+
+			commentPayloads[i] = commentPayload{
+				ID:        comment.ID,
+				CreatedAt: comment.CreatedAt.Format("2006-01-02T15:04:05.999Z"),
+				UpdatedAt: comment.UpdatedAt.Format("2006-01-02T15:04:05.999Z"),
+				Body:      comment.Body,
+				Author: authorProfile{
+					Username:  comment.AuthorUsername,
+					Bio:       comment.AuthorBio.String,
+					Image:     comment.AuthorImage.String,
+					Following: following,
+				},
+			}
+		}
+
+		response := commentsResponseBody{
+			Comments: commentPayloads,
+		}
+
+		encodeResponse(r.Context(), http.StatusOK, response, w)
+	}
+}
+
+type commentsResponseBody struct {
+	Comments []commentPayload `json:"comments"`
+}

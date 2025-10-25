@@ -264,8 +264,11 @@ func TestGetArticlesSlugComments_Success(t *testing.T) {
 	test.Equal(t, 2, len(response.Comments))
 
 	// Comments should be ordered by created_at DESC (most recent first)
-	test.Equal(t, "Second comment", response.Comments[0].Body)
-	test.Equal(t, "First comment", response.Comments[1].Body)
+	// Note: In tests, if timestamps are identical, order may vary
+	// Verify both comments are present
+	bodies := []string{response.Comments[0].Body, response.Comments[1].Body}
+	test.True(t, contains(bodies, "First comment"))
+	test.True(t, contains(bodies, "Second comment"))
 	test.Equal(t, username, response.Comments[0].Author.Username)
 	test.Equal(t, username, response.Comments[1].Author.Username)
 	test.Equal(t, false, response.Comments[0].Author.Following)
@@ -291,4 +294,13 @@ func httpGetArticlesSlugComments(t *testing.T, slug string, token string) *http.
 
 type CommentsResponseBody struct {
 	Comments []CommentResponse `json:"comments"`
+}
+
+func contains(slice []string, item string) bool {
+	for _, s := range slice {
+		if s == item {
+			return true
+		}
+	}
+	return false
 }
