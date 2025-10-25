@@ -522,8 +522,8 @@ func handleGetArticles(db *sql.DB) http.HandlerFunc {
 
 		// Build article IDs for batch queries
 		articleIDs := make([]int64, len(articles))
-		for i, article := range articles {
-			articleIDs[i] = article.ID
+		for i := range articles {
+			articleIDs[i] = articles[i].ID
 		}
 
 		// Get favorites counts for all articles
@@ -557,8 +557,8 @@ func handleGetArticles(db *sql.DB) http.HandlerFunc {
 
 		// Get author IDs for following check
 		authorIDs := make([]int64, len(articles))
-		for i, article := range articles {
-			authorIDs[i] = article.AuthorID
+		for i := range articles {
+			authorIDs[i] = articles[i].AuthorID
 		}
 
 		// Get following status if authenticated
@@ -579,9 +579,9 @@ func handleGetArticles(db *sql.DB) http.HandlerFunc {
 
 		// Build response
 		responseArticles := make([]articleListResponse, len(articles))
-		for i, article := range articles {
+		for i := range articles {
 			// Get tags for this article
-			tags, err := queries.GetArticleTagsByArticleID(r.Context(), article.ID)
+			tags, err := queries.GetArticleTagsByArticleID(r.Context(), articles[i].ID)
 			if err != nil {
 				encodeErrorResponse(r.Context(), http.StatusInternalServerError, []error{err}, w)
 				return
@@ -593,19 +593,19 @@ func handleGetArticles(db *sql.DB) http.HandlerFunc {
 			}
 
 			responseArticles[i] = articleListResponse{
-				Slug:           article.Slug,
-				Title:          article.Title,
-				Description:    article.Description,
+				Slug:           articles[i].Slug,
+				Title:          articles[i].Title,
+				Description:    articles[i].Description,
 				TagList:        tags,
-				CreatedAt:      article.CreatedAt.Format("2006-01-02T15:04:05.000Z"),
-				UpdatedAt:      article.UpdatedAt.Format("2006-01-02T15:04:05.000Z"),
-				Favorited:      favoritedMap[article.ID],
-				FavoritesCount: favoritesMap[article.ID],
+				CreatedAt:      articles[i].CreatedAt.Format("2006-01-02T15:04:05.000Z"),
+				UpdatedAt:      articles[i].UpdatedAt.Format("2006-01-02T15:04:05.000Z"),
+				Favorited:      favoritedMap[articles[i].ID],
+				FavoritesCount: favoritesMap[articles[i].ID],
 				Author: authorProfile{
-					Username:  article.AuthorUsername,
-					Bio:       article.AuthorBio.String,
-					Image:     article.AuthorImage.String,
-					Following: followingMap[article.AuthorID],
+					Username:  articles[i].AuthorUsername,
+					Bio:       articles[i].AuthorBio.String,
+					Image:     articles[i].AuthorImage.String,
+					Following: followingMap[articles[i].AuthorID],
 				},
 			}
 		}
@@ -641,7 +641,7 @@ func listArticlesWithFilters(ctx context.Context, db *sql.DB, tag, author, favor
 
 	// Build WHERE clauses
 	var whereClauses []string
-	var args []interface{}
+	var args []any
 	argIndex := 1
 
 	if tag != "" {
@@ -698,7 +698,7 @@ func listArticlesWithFilters(ctx context.Context, db *sql.DB, tag, author, favor
 	if err != nil {
 		return nil, 0, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var articles []sqlite.ListArticlesRow
 	for rows.Next() {
@@ -721,7 +721,7 @@ func listArticlesWithFilters(ctx context.Context, db *sql.DB, tag, author, favor
 		articles = append(articles, article)
 	}
 
-	if err = rows.Err(); err != nil {
+	if err := rows.Err(); err != nil {
 		return nil, 0, err
 	}
 
