@@ -1,7 +1,7 @@
 # Implementation Plan: GET /api/articles/:slug/comments
 
-**Status**: [ ] Not Started
-**PR**: (will be added after PR creation)
+**Status**: [ ] In Progress
+**PR**: #31
 
 ## Context
 
