@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"slices"
 	"testing"
 	"time"
 
@@ -267,8 +268,8 @@ func TestGetArticlesSlugComments_Success(t *testing.T) {
 	// Note: In tests, if timestamps are identical, order may vary
 	// Verify both comments are present
 	bodies := []string{response.Comments[0].Body, response.Comments[1].Body}
-	test.True(t, contains(bodies, "First comment"))
-	test.True(t, contains(bodies, "Second comment"))
+	test.True(t, slices.Contains(bodies, "First comment"))
+	test.True(t, slices.Contains(bodies, "Second comment"))
 	test.Equal(t, username, response.Comments[0].Author.Username)
 	test.Equal(t, username, response.Comments[1].Author.Username)
 	test.Equal(t, false, response.Comments[0].Author.Following)
@@ -296,11 +297,142 @@ type CommentsResponseBody struct {
 	Comments []CommentResponse `json:"comments"`
 }
 
-func contains(slice []string, item string) bool {
-	for _, s := range slice {
-		if s == item {
-			return true
-		}
+func TestGetArticlesSlugComments_ArticleNotFound(t *testing.T) {
+	t.Parallel()
+
+	// Test: GET comments for non-existent article
+	res := httpGetArticlesSlugComments(t, "nonexistent-article-slug", "")
+	test.Equal(t, http.StatusNotFound, res.StatusCode)
+	t.Cleanup(func() { _ = res.Body.Close() })
+}
+
+func TestGetArticlesSlugComments_EmptyComments(t *testing.T) {
+	t.Parallel()
+
+	// Setup: Create a user and get token
+	unique := fmt.Sprintf("%d", time.Now().UnixNano())
+	username := "empty_comments_author_" + unique
+	email := fmt.Sprintf("empty_comments_%s@example.com", unique)
+
+	userReq := UserPostRequestBody{
+		Username: username,
+		Email:    email,
+		Password: "testpass123",
 	}
-	return false
+	userRes := httpPostUsers(t, userReq)
+	test.Equal(t, http.StatusCreated, userRes.StatusCode)
+	t.Cleanup(func() { _ = userRes.Body.Close() })
+
+	var userResponse UserResponseBody
+	test.Nil(t, json.NewDecoder(userRes.Body).Decode(&userResponse))
+	token := userResponse.Token
+
+	// Create an article with no comments
+	articleReq := ArticlePostRequestBody{
+		Article: ArticlePostRequest{
+			Title:       "Article Without Comments " + unique,
+			Description: "Test article",
+			Body:        "Article body",
+			TagList:     []string{"test"},
+		},
+	}
+
+	articleRes := httpPostArticles(t, articleReq, token)
+	test.Equal(t, http.StatusCreated, articleRes.StatusCode)
+	t.Cleanup(func() { _ = articleRes.Body.Close() })
+
+	var articleResponse ArticleResponseBody
+	test.Nil(t, json.NewDecoder(articleRes.Body).Decode(&articleResponse))
+	slug := articleResponse.Article.Slug
+
+	// Test: GET comments for article with no comments
+	res := httpGetArticlesSlugComments(t, slug, "")
+	test.Equal(t, http.StatusOK, res.StatusCode)
+	t.Cleanup(func() { _ = res.Body.Close() })
+
+	var response CommentsResponseBody
+	test.Nil(t, json.NewDecoder(res.Body).Decode(&response))
+	test.Equal(t, 0, len(response.Comments))
+}
+
+func TestGetArticlesSlugComments_WithFollowing(t *testing.T) {
+	t.Parallel()
+
+	// Setup: Create author user
+	unique := fmt.Sprintf("%d", time.Now().UnixNano())
+	authorUsername := "comment_author_" + unique
+	authorEmail := fmt.Sprintf("author_%s@example.com", unique)
+
+	authorUserReq := UserPostRequestBody{
+		Username: authorUsername,
+		Email:    authorEmail,
+		Password: "testpass123",
+	}
+	authorRes := httpPostUsers(t, authorUserReq)
+	test.Equal(t, http.StatusCreated, authorRes.StatusCode)
+	t.Cleanup(func() { _ = authorRes.Body.Close() })
+
+	var authorResponse UserResponseBody
+	test.Nil(t, json.NewDecoder(authorRes.Body).Decode(&authorResponse))
+	authorToken := authorResponse.Token
+
+	// Create follower user
+	followerUsername := "follower_" + unique
+	followerEmail := fmt.Sprintf("follower_%s@example.com", unique)
+
+	followerUserReq := UserPostRequestBody{
+		Username: followerUsername,
+		Email:    followerEmail,
+		Password: "testpass123",
+	}
+	followerRes := httpPostUsers(t, followerUserReq)
+	test.Equal(t, http.StatusCreated, followerRes.StatusCode)
+	t.Cleanup(func() { _ = followerRes.Body.Close() })
+
+	var followerResponse UserResponseBody
+	test.Nil(t, json.NewDecoder(followerRes.Body).Decode(&followerResponse))
+	followerToken := followerResponse.Token
+
+	// Follower follows author
+	followRes := httpPostProfileFollow(t, authorUsername, followerToken)
+	test.Equal(t, http.StatusOK, followRes.StatusCode)
+	t.Cleanup(func() { _ = followRes.Body.Close() })
+
+	// Author creates article and comment
+	articleReq := ArticlePostRequestBody{
+		Article: ArticlePostRequest{
+			Title:       "Article for Following Test " + unique,
+			Description: "Test article",
+			Body:        "Article body",
+			TagList:     []string{"test"},
+		},
+	}
+
+	articleRes := httpPostArticles(t, articleReq, authorToken)
+	test.Equal(t, http.StatusCreated, articleRes.StatusCode)
+	t.Cleanup(func() { _ = articleRes.Body.Close() })
+
+	var articleResponse ArticleResponseBody
+	test.Nil(t, json.NewDecoder(articleRes.Body).Decode(&articleResponse))
+	slug := articleResponse.Article.Slug
+
+	commentReq := CommentPostRequestBody{
+		Comment: CommentPostRequest{
+			Body: "Test comment for following",
+		},
+	}
+	commentRes := httpPostArticlesSlugComments(t, slug, commentReq, authorToken)
+	test.Equal(t, http.StatusCreated, commentRes.StatusCode)
+	t.Cleanup(func() { _ = commentRes.Body.Close() })
+
+	// Test: GET comments as follower (should show following = true)
+	res := httpGetArticlesSlugComments(t, slug, followerToken)
+	test.Equal(t, http.StatusOK, res.StatusCode)
+	t.Cleanup(func() { _ = res.Body.Close() })
+
+	var response CommentsResponseBody
+	test.Nil(t, json.NewDecoder(res.Body).Decode(&response))
+	test.Equal(t, 1, len(response.Comments))
+	test.Equal(t, authorUsername, response.Comments[0].Author.Username)
+	test.Equal(t, true, response.Comments[0].Author.Following)
 }

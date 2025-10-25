@@ -138,7 +138,7 @@ type commentPayload struct {
 	Author    authorProfile `json:"author"`
 }
 
-func handleGetArticlesSlugComments(db *sql.DB, jwtSecret string) http.HandlerFunc {
+func handleGetArticlesSlugComments(db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Get article slug from URL path
 		slug := r.PathValue("slug")
@@ -148,8 +148,8 @@ func handleGetArticlesSlugComments(db *sql.DB, jwtSecret string) http.HandlerFun
 
 		queries := sqlite.New(db)
 
-		// Get comments by article slug
-		comments, err := queries.GetCommentsByArticleSlug(r.Context(), slug)
+		// Verify article exists first
+		_, err := queries.GetArticleBySlug(r.Context(), slug)
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				encodeErrorResponse(r.Context(), http.StatusNotFound, []error{errors.New("article not found")}, w)
@@ -159,15 +159,22 @@ func handleGetArticlesSlugComments(db *sql.DB, jwtSecret string) http.HandlerFun
 			return
 		}
 
+		// Get comments by article slug
+		comments, err := queries.GetCommentsByArticleSlug(r.Context(), slug)
+		if err != nil {
+			encodeErrorResponse(r.Context(), http.StatusInternalServerError, []error{err}, w)
+			return
+		}
+
 		// Build response with comments
 		commentPayloads := make([]commentPayload, len(comments))
-		for i, comment := range comments {
+		for i := range comments {
 			// Check if current user is following the comment author
 			following := false
-			if userID != 0 && userID != comment.AuthorID {
+			if userID != 0 && userID != comments[i].AuthorID {
 				isFollowingInt, err := queries.IsFollowing(r.Context(), sqlite.IsFollowingParams{
 					FollowerID: userID,
-					FollowedID: comment.AuthorID,
+					FollowedID: comments[i].AuthorID,
 				})
 				if err != nil {
 					encodeErrorResponse(r.Context(), http.StatusInternalServerError, []error{err}, w)
@@ -177,14 +184,14 @@ func handleGetArticlesSlugComments(db *sql.DB, jwtSecret string) http.HandlerFun
 			}
 
 			commentPayloads[i] = commentPayload{
-				ID:        comment.ID,
-				CreatedAt: comment.CreatedAt.Format("2006-01-02T15:04:05.999Z"),
-				UpdatedAt: comment.UpdatedAt.Format("2006-01-02T15:04:05.999Z"),
-				Body:      comment.Body,
+				ID:        comments[i].ID,
+				CreatedAt: comments[i].CreatedAt.Format("2006-01-02T15:04:05.999Z"),
+				UpdatedAt: comments[i].UpdatedAt.Format("2006-01-02T15:04:05.999Z"),
+				Body:      comments[i].Body,
 				Author: authorProfile{
-					Username:  comment.AuthorUsername,
-					Bio:       comment.AuthorBio.String,
-					Image:     comment.AuthorImage.String,
+					Username:  comments[i].AuthorUsername,
+					Bio:       comments[i].AuthorBio.String,
+					Image:     comments[i].AuthorImage.String,
 					Following: following,
 				},
 			}
