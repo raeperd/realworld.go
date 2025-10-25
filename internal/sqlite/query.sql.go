@@ -242,6 +242,20 @@ func (q *Queries) DeleteComment(ctx context.Context, id int64) error {
 	return err
 }
 
+const deleteFavorite = `-- name: DeleteFavorite :exec
+DELETE FROM favorites WHERE user_id = ? AND article_id = ?
+`
+
+type DeleteFavoriteParams struct {
+	UserID    int64
+	ArticleID int64
+}
+
+func (q *Queries) DeleteFavorite(ctx context.Context, arg DeleteFavoriteParams) error {
+	_, err := q.db.ExecContext(ctx, deleteFavorite, arg.UserID, arg.ArticleID)
+	return err
+}
+
 const deleteFollow = `-- name: DeleteFollow :exec
 DELETE FROM follows WHERE follower_id = ? AND followed_id = ?
 `
