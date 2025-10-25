@@ -417,3 +417,45 @@ type articlePutRequest struct {
 	Description *string `json:"description,omitempty"`
 	Body        *string `json:"body,omitempty"`
 }
+
+func handleDeleteArticlesSlug(db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		slug := r.PathValue("slug")
+
+		// Get authenticated user ID from context
+		userID, ok := r.Context().Value(userIDKey).(int64)
+		if !ok {
+			encodeErrorResponse(r.Context(), http.StatusUnauthorized, []error{errors.New("unauthorized")}, w)
+			return
+		}
+
+		queries := sqlite.New(db)
+
+		// Get existing article by slug
+		article, err := queries.GetArticleBySlug(r.Context(), slug)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				encodeErrorResponse(r.Context(), http.StatusNotFound, []error{errors.New("article not found")}, w)
+				return
+			}
+			encodeErrorResponse(r.Context(), http.StatusInternalServerError, []error{err}, w)
+			return
+		}
+
+		// Check if user is the author
+		if article.AuthorID != userID {
+			encodeErrorResponse(r.Context(), http.StatusForbidden, []error{errors.New("not authorized to delete this article")}, w)
+			return
+		}
+
+		// Delete the article
+		err = queries.DeleteArticle(r.Context(), article.ID)
+		if err != nil {
+			encodeErrorResponse(r.Context(), http.StatusInternalServerError, []error{err}, w)
+			return
+		}
+
+		// Return 200 OK with no content
+		w.WriteHeader(http.StatusOK)
+	}
+}

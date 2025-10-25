@@ -641,3 +641,159 @@ func TestPutArticlesSlug_PartialUpdate(t *testing.T) {
 	test.Equal(t, "Original description", response.Article.Description) // Description unchanged
 	test.Equal(t, "Updated body only", response.Article.Body)           // Body updated
 }
+
+func TestDeleteArticlesSlug_Success(t *testing.T) {
+	t.Parallel()
+
+	// Setup: Create a user and article
+	unique := fmt.Sprintf("%d", time.Now().UnixNano())
+	username := "article_deleter_" + unique
+	email := fmt.Sprintf("deleter_%s@example.com", unique)
+
+	userReq := UserPostRequestBody{
+		Username: username,
+		Email:    email,
+		Password: "testpass123",
+	}
+	userRes := httpPostUsers(t, userReq)
+	test.Equal(t, http.StatusCreated, userRes.StatusCode)
+	t.Cleanup(func() { _ = userRes.Body.Close() })
+
+	var userResponse UserResponseBody
+	test.Nil(t, json.NewDecoder(userRes.Body).Decode(&userResponse))
+	token := userResponse.Token
+
+	// Create an article
+	articleReq := ArticlePostRequestBody{
+		Article: ArticlePostRequest{
+			Title:       "Article to Delete " + unique,
+			Description: "Will be deleted",
+			Body:        "Body content",
+			TagList:     []string{"delete", "test"},
+		},
+	}
+
+	createRes := httpPostArticles(t, articleReq, token)
+	test.Equal(t, http.StatusCreated, createRes.StatusCode)
+	t.Cleanup(func() { _ = createRes.Body.Close() })
+
+	var createResponse ArticleResponseBody
+	test.Nil(t, json.NewDecoder(createRes.Body).Decode(&createResponse))
+	slug := createResponse.Article.Slug
+
+	// Test: Delete the article
+	res := httpDeleteArticlesSlug(t, slug, token)
+	test.Equal(t, http.StatusOK, res.StatusCode)
+	t.Cleanup(func() { _ = res.Body.Close() })
+
+	// Verify article is deleted by trying to get it
+	getRes := httpGetArticlesSlug(t, slug, "")
+	test.Equal(t, http.StatusNotFound, getRes.StatusCode)
+	t.Cleanup(func() { _ = getRes.Body.Close() })
+}
+
+func httpDeleteArticlesSlug(t *testing.T, slug string, token string) *http.Response {
+	t.Helper()
+
+	req, err := http.NewRequest(http.MethodDelete, endpoint+"/api/articles/"+slug, nil)
+	test.Nil(t, err)
+	if token != "" {
+		req.Header.Set("Authorization", "Token "+token)
+	}
+
+	res, err := http.DefaultClient.Do(req)
+	test.Nil(t, err)
+
+	return res
+}
+
+func TestDeleteArticlesSlug_NotFound(t *testing.T) {
+	t.Parallel()
+
+	// Setup: Create a user
+	unique := fmt.Sprintf("%d", time.Now().UnixNano())
+	username := "user_" + unique
+	email := fmt.Sprintf("user_%s@example.com", unique)
+
+	userReq := UserPostRequestBody{
+		Username: username,
+		Email:    email,
+		Password: "testpass123",
+	}
+	userRes := httpPostUsers(t, userReq)
+	test.Equal(t, http.StatusCreated, userRes.StatusCode)
+	t.Cleanup(func() { _ = userRes.Body.Close() })
+
+	var userResponse UserResponseBody
+	test.Nil(t, json.NewDecoder(userRes.Body).Decode(&userResponse))
+	token := userResponse.Token
+
+	// Test: Try to delete non-existent article
+	res := httpDeleteArticlesSlug(t, "nonexistent-slug", token)
+	test.Equal(t, http.StatusNotFound, res.StatusCode)
+	t.Cleanup(func() { _ = res.Body.Close() })
+}
+
+func TestDeleteArticlesSlug_Forbidden(t *testing.T) {
+	t.Parallel()
+
+	// Setup: Create two users
+	unique := fmt.Sprintf("%d", time.Now().UnixNano())
+
+	// User 1 - article author
+	author := "author_" + unique
+	authorEmail := fmt.Sprintf("author_%s@example.com", unique)
+
+	authorReq := UserPostRequestBody{
+		Username: author,
+		Email:    authorEmail,
+		Password: "testpass123",
+	}
+	authorRes := httpPostUsers(t, authorReq)
+	test.Equal(t, http.StatusCreated, authorRes.StatusCode)
+	t.Cleanup(func() { _ = authorRes.Body.Close() })
+
+	var authorResponse UserResponseBody
+	test.Nil(t, json.NewDecoder(authorRes.Body).Decode(&authorResponse))
+	authorToken := authorResponse.Token
+
+	// Create an article as author
+	articleReq := ArticlePostRequestBody{
+		Article: ArticlePostRequest{
+			Title:       "Author's Article " + unique,
+			Description: "Description",
+			Body:        "Body content",
+			TagList:     []string{},
+		},
+	}
+
+	createRes := httpPostArticles(t, articleReq, authorToken)
+	test.Equal(t, http.StatusCreated, createRes.StatusCode)
+	t.Cleanup(func() { _ = createRes.Body.Close() })
+
+	var createResponse ArticleResponseBody
+	test.Nil(t, json.NewDecoder(createRes.Body).Decode(&createResponse))
+	slug := createResponse.Article.Slug
+
+	// User 2 - different user
+	otherUser := "other_" + unique
+	otherEmail := fmt.Sprintf("other_%s@example.com", unique)
+
+	otherReq := UserPostRequestBody{
+		Username: otherUser,
+		Email:    otherEmail,
+		Password: "testpass123",
+	}
+	otherRes := httpPostUsers(t, otherReq)
+	test.Equal(t, http.StatusCreated, otherRes.StatusCode)
+	t.Cleanup(func() { _ = otherRes.Body.Close() })
+
+	var otherResponse UserResponseBody
+	test.Nil(t, json.NewDecoder(otherRes.Body).Decode(&otherResponse))
+	otherToken := otherResponse.Token
+
+	// Test: Try to delete article as different user
+	res := httpDeleteArticlesSlug(t, slug, otherToken)
+	test.Equal(t, http.StatusForbidden, res.StatusCode)
+	t.Cleanup(func() { _ = res.Body.Close() })
+}
