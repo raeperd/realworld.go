@@ -166,22 +166,36 @@ func handleGetArticlesSlugComments(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		// Build response with comments
-		commentPayloads := make([]commentPayload, len(comments))
-		for i := range comments {
-			// Check if current user is following the comment author
-			following := false
-			if userID != 0 && userID != comments[i].AuthorID {
+		// Build following status map to avoid N+1 queries
+		followingMap := make(map[int64]bool)
+		if userID != 0 {
+			// Collect unique author IDs
+			authorIDs := make(map[int64]struct{})
+			for i := range comments {
+				if comments[i].AuthorID != userID {
+					authorIDs[comments[i].AuthorID] = struct{}{}
+				}
+			}
+
+			// Batch check following status for all authors
+			for authorID := range authorIDs {
 				isFollowingInt, err := queries.IsFollowing(r.Context(), sqlite.IsFollowingParams{
 					FollowerID: userID,
-					FollowedID: comments[i].AuthorID,
+					FollowedID: authorID,
 				})
 				if err != nil {
 					encodeErrorResponse(r.Context(), http.StatusInternalServerError, []error{err}, w)
 					return
 				}
-				following = isFollowingInt == 1
+				followingMap[authorID] = isFollowingInt == 1
 			}
+		}
+
+		// Build response with comments
+		commentPayloads := make([]commentPayload, len(comments))
+		for i := range comments {
+			// Get following status from map (defaults to false if not present)
+			following := followingMap[comments[i].AuthorID]
 
 			commentPayloads[i] = commentPayload{
 				ID:        comments[i].ID,
