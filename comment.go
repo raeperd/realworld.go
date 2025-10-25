@@ -137,3 +137,98 @@ type commentPayload struct {
 	Body      string        `json:"body"`
 	Author    authorProfile `json:"author"`
 }
+
+func handleGetArticlesSlugComments(db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// Get article slug from URL path
+		slug := r.PathValue("slug")
+
+		// Get optional user ID from context (for following status)
+		userID, _ := r.Context().Value(userIDKey).(int64)
+
+		queries := sqlite.New(db)
+
+		// Verify article exists first
+		_, err := queries.GetArticleBySlug(r.Context(), slug)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				encodeErrorResponse(r.Context(), http.StatusNotFound, []error{errors.New("article not found")}, w)
+				return
+			}
+			encodeErrorResponse(r.Context(), http.StatusInternalServerError, []error{err}, w)
+			return
+		}
+
+		// Get comments by article slug
+		comments, err := queries.GetCommentsByArticleSlug(r.Context(), slug)
+		if err != nil {
+			encodeErrorResponse(r.Context(), http.StatusInternalServerError, []error{err}, w)
+			return
+		}
+
+		// Build following status map to avoid N+1 queries
+		followingMap := make(map[int64]bool)
+		if userID != 0 && len(comments) > 0 {
+			// Collect unique author IDs (excluding current user)
+			authorIDsMap := make(map[int64]struct{})
+			for i := range comments {
+				if comments[i].AuthorID != userID {
+					authorIDsMap[comments[i].AuthorID] = struct{}{}
+				}
+			}
+
+			// Convert map to slice for batch query
+			if len(authorIDsMap) > 0 {
+				authorIDs := make([]int64, 0, len(authorIDsMap))
+				for id := range authorIDsMap {
+					authorIDs = append(authorIDs, id)
+				}
+
+				// Single batch query to get all following relationships
+				followedIDs, err := queries.GetFollowingByIDs(r.Context(), sqlite.GetFollowingByIDsParams{
+					FollowerID:  userID,
+					FollowedIds: authorIDs,
+				})
+				if err != nil {
+					encodeErrorResponse(r.Context(), http.StatusInternalServerError, []error{err}, w)
+					return
+				}
+
+				// Build map for O(1) lookups
+				for _, followedID := range followedIDs {
+					followingMap[followedID] = true
+				}
+			}
+		}
+
+		// Build response with comments
+		commentPayloads := make([]commentPayload, len(comments))
+		for i := range comments {
+			// Get following status from map (defaults to false if not present)
+			following := followingMap[comments[i].AuthorID]
+
+			commentPayloads[i] = commentPayload{
+				ID:        comments[i].ID,
+				CreatedAt: comments[i].CreatedAt.Format("2006-01-02T15:04:05.999Z"),
+				UpdatedAt: comments[i].UpdatedAt.Format("2006-01-02T15:04:05.999Z"),
+				Body:      comments[i].Body,
+				Author: authorProfile{
+					Username:  comments[i].AuthorUsername,
+					Bio:       comments[i].AuthorBio.String,
+					Image:     comments[i].AuthorImage.String,
+					Following: following,
+				},
+			}
+		}
+
+		response := commentsResponseBody{
+			Comments: commentPayloads,
+		}
+
+		encodeResponse(r.Context(), http.StatusOK, response, w)
+	}
+}
+
+type commentsResponseBody struct {
+	Comments []commentPayload `json:"comments"`
+}
