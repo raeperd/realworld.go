@@ -1354,7 +1354,7 @@ func TestGetArticlesFeed_Pagination(t *testing.T) {
 	t.Cleanup(func() { _ = followRes.Body.Close() })
 
 	// Create 3 articles
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		articleReq := ArticlePostRequestBody{
 			Article: ArticlePostRequest{
 				Title:       fmt.Sprintf("Article %d %s", i, unique),
@@ -1368,7 +1368,7 @@ func TestGetArticlesFeed_Pagination(t *testing.T) {
 		t.Cleanup(func() { _ = articleRes.Body.Close() })
 	}
 
-	// Test: limit=2
+	// Test with limit parameter set to 2
 	res1 := httpGetArticlesFeed(t, "limit=2", followerToken)
 	test.Equal(t, http.StatusOK, res1.StatusCode)
 	t.Cleanup(func() { _ = res1.Body.Close() })
@@ -1378,7 +1378,7 @@ func TestGetArticlesFeed_Pagination(t *testing.T) {
 	test.Equal(t, int64(3), response1.ArticlesCount)
 	test.Equal(t, 2, len(response1.Articles))
 
-	// Test: offset=2
+	// Test with offset parameter set to 2
 	res2 := httpGetArticlesFeed(t, "offset=2", followerToken)
 	test.Equal(t, http.StatusOK, res2.StatusCode)
 	t.Cleanup(func() { _ = res2.Body.Close() })
