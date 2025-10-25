@@ -885,3 +885,101 @@ type articleListResponse struct {
 	FavoritesCount int64         `json:"favoritesCount"`
 	Author         authorProfile `json:"author"`
 }
+
+func handlePostArticlesSlugFavorite(db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		slug := r.PathValue("slug")
+
+		// Get authenticated user ID from context
+		userID, ok := r.Context().Value(userIDKey).(int64)
+		if !ok {
+			encodeErrorResponse(r.Context(), http.StatusUnauthorized, []error{errors.New("unauthorized")}, w)
+			return
+		}
+
+		tx, err := db.BeginTx(r.Context(), nil)
+		if err != nil {
+			encodeErrorResponse(r.Context(), http.StatusInternalServerError, []error{err}, w)
+			return
+		}
+		defer func() { _ = tx.Rollback() }()
+
+		queries := sqlite.New(tx)
+
+		// Get article by slug to verify it exists
+		article, err := queries.GetArticleBySlug(r.Context(), slug)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				encodeErrorResponse(r.Context(), http.StatusNotFound, []error{errors.New("article not found")}, w)
+				return
+			}
+			encodeErrorResponse(r.Context(), http.StatusInternalServerError, []error{err}, w)
+			return
+		}
+
+		// Create favorite (idempotent - ON CONFLICT DO NOTHING)
+		err = queries.CreateFavorite(r.Context(), sqlite.CreateFavoriteParams{
+			UserID:    userID,
+			ArticleID: article.ID,
+		})
+		if err != nil {
+			encodeErrorResponse(r.Context(), http.StatusInternalServerError, []error{err}, w)
+			return
+		}
+
+		// Get tags for the article
+		tags, err := queries.GetArticleTagsByArticleID(r.Context(), article.ID)
+		if err != nil {
+			encodeErrorResponse(r.Context(), http.StatusInternalServerError, []error{err}, w)
+			return
+		}
+
+		// Ensure tags is never null in JSON response
+		if tags == nil {
+			tags = []string{}
+		}
+
+		// Get updated favorites count
+		favoritesCount, err := queries.GetFavoritesCount(r.Context(), article.ID)
+		if err != nil {
+			encodeErrorResponse(r.Context(), http.StatusInternalServerError, []error{err}, w)
+			return
+		}
+
+		// Check following status
+		followingInt, err := queries.IsFollowing(r.Context(), sqlite.IsFollowingParams{
+			FollowerID: userID,
+			FollowedID: article.AuthorID,
+		})
+		if err != nil {
+			encodeErrorResponse(r.Context(), http.StatusInternalServerError, []error{err}, w)
+			return
+		}
+		following := followingInt > 0
+
+		if err := tx.Commit(); err != nil {
+			encodeErrorResponse(r.Context(), http.StatusInternalServerError, []error{err}, w)
+			return
+		}
+
+		encodeResponse(r.Context(), http.StatusOK, articleResponseBody{
+			Article: articleResponse{
+				Slug:           article.Slug,
+				Title:          article.Title,
+				Description:    article.Description,
+				Body:           article.Body,
+				TagList:        tags,
+				CreatedAt:      article.CreatedAt.Format("2006-01-02T15:04:05.000Z"),
+				UpdatedAt:      article.UpdatedAt.Format("2006-01-02T15:04:05.000Z"),
+				Favorited:      true, // Always true since we just favorited it
+				FavoritesCount: favoritesCount,
+				Author: authorProfile{
+					Username:  article.AuthorUsername,
+					Bio:       article.AuthorBio.String,
+					Image:     article.AuthorImage.String,
+					Following: following,
+				},
+			},
+		}, w)
+	}
+}
