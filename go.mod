@@ -5,7 +5,7 @@ go 1.24.2
 toolchain go1.24.9
 
 require (
-	github.com/golang-jwt/jwt/v5 v5.3.0
+	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/raeperd/test v0.2.0
 	modernc.org/sqlite v1.40.1
 )
